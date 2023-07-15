@@ -50,6 +50,9 @@ impl AreaDao {
     pub fn code_detail(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {
         self.code.detail(code)
     }
+    pub fn code_full_detail(&self, code: &str) -> AreaResult<Vec<Vec<AreaCodeFullItem>>> {
+        self.code.full_detail(code)
+    }
     pub fn code_search(&self, name: &str, limit: usize) -> AreaResult<Vec<AreaSearchItem>> {
         self.code.search(name, limit)
     }

@@ -16,6 +16,12 @@ pub struct AreaCodeItem {
 }
 
 #[derive(Debug)]
+pub struct AreaCodeFullItem {
+    pub selected: bool,
+    pub item: AreaCodeItem,
+}
+
+#[derive(Debug)]
 struct AreaCodeIndex {
     code: String,
     childs: HashMap<String, AreaCodeIndex>,
@@ -342,6 +348,50 @@ impl AreaCode {
             .collect::<Vec<_>>())
     }
 
+    /// 获取行政区域编码同级区域的信息
+    pub fn full_detail(&self, code: &str) -> AreaResult<Vec<Vec<AreaCodeFullItem>>> {
+        let code_data = Self::code_parse(code);
+        if code_data.is_empty() {
+            return Ok(vec![]);
+        }
+        let mut out_list = Vec::with_capacity(5);
+        let mut now_list = Some(self.childs("")?);
+        for ddd in code_data {
+            let mut end = false;
+            if let Some(tmp) = now_list {
+                out_list.push(
+                    tmp.into_iter()
+                        .map(|e| {
+                            let selected = if e.code == *ddd {
+                                end = e.leaf;
+                                true
+                            } else {
+                                false
+                            };
+                            AreaCodeFullItem { selected, item: e }
+                        })
+                        .collect::<Vec<_>>(),
+                );
+            }
+            if end {
+                now_list = None;
+                break;
+            }
+            now_list = Some(self.childs(ddd)?);
+        }
+        if let Some(tmp) = now_list {
+            out_list.push(
+                tmp.into_iter()
+                    .map(|e| AreaCodeFullItem {
+                        selected: false,
+                        item: e,
+                    })
+                    .collect::<Vec<_>>(),
+            );
+        }
+        Ok(out_list)
+    }
+
     /// 通过部分地址获取可能区域
     pub fn search(&self, name: &str, limit: usize) -> AreaResult<Vec<AreaSearchItem>> {
         let name = name.trim();
@@ -459,6 +509,8 @@ fn test_code() {
     assert_eq!(res[1].code, "4414");
     let res = area.code_childs("").unwrap();
     assert!(res.iter().any(|e| e.code == "44"));
+    let res = area.code_full_detail("441403131203").unwrap();
+    assert_eq!(res.len(), 5);
     let res = area.code_search("广东 梅州 南口", 10).unwrap();
     assert_eq!(res[0].item[1].code, "4414");
     let res = area.geo_search(22.57729, 113.89409).unwrap();
