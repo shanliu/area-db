@@ -1,6 +1,6 @@
 [package]
 name = "area-db"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["liushan <shan.liu@msn.com>"]
 edition = "2021"
 build = "src/build.rs"
@@ -40,7 +40,7 @@ crate-type = ["cdylib","rlib"]
 default=[
     "data-csv-embed-geo",
     "data-csv-embed-code",
-   # "data-sqlite-source",
+   "data-sqlite-source",
     #"data-mysql",
     "lib-clib"
 ]

@@ -29,9 +29,9 @@ fn create_csv_zip_file(file_path: &str) {
 #[cfg(feature = "data-sqlite-source")]
 fn build_sqlite_form_source() {
     use std::path::Path;
-    println!("cargo:rustc-link-search=native=sqlite-amalgamation-3420000");
+    println!("cargo:rustc-link-search=native=sqlite-amalgamation");
     println!("cargo:rustc-link-lib=static=sqlite3");
-    let c_api_src_dir = Path::new("sqlite-amalgamation-3420000");
+    let c_api_src_dir = Path::new("sqlite-amalgamation");
     cc::Build::new()
         .flag("-DSQLITE_ENABLE_RTREE=1")
         .include(c_api_src_dir)

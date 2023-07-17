@@ -89,11 +89,11 @@ let area = area_lib::AreaDao::new(data).unwrap();
 
 3. 使用sqlite作为数据来源：[表定义](data/sqlite-table.sql) [内置的包含5级行政区域跟坐标的sqlite数据](data/area-data-sqlite.7z) `解压后使用`
 
+> 如果你已经装了lib-sqlite的库，可用:`data-sqlite` 会使用系统的sqlite库. 具体参见crate:`rusqlite`实现
+
+> 如果你未安装lib-sqlite的库，可用:`data-sqlite-source` 会通过c源码编译sqlite库. sqlite源码通过子模块`git submodule update --init`获取
+
 > 仅开启sqlite文件支持，不引入内置数据源，方便更新数据，不嵌入二进制中，二进制文件小
-
-> 如果你已经装了lib-sqlite的库，可用:`data-sqlite` 会使用系统的sqlite库
-
-> 如果你未安装lib-sqlite的库，可用：`data-sqlite-source` 会通过c源码编译sqlite库
 
 ```toml
 #cargo.toml
@@ -148,7 +148,7 @@ println!("{}", &res);
 
 ```rust
 let child="441403133";//地址code
-let res = area.code_detail(child).unwrap();
+let res = area.code_find(child).unwrap();
 println!("{}", &res);
 ```
 
@@ -172,7 +172,7 @@ println!("{}", &res);
 > 目前到市一级，因为只找到了市一级的坐标数据
 
 ```rust
-let res = area.geo_search(  114.13548 ,  26.61474, ).unwrap();
+let res = area.geo_search(  26.61474,  114.13548 , ).unwrap();
 println!("{}", &res);
 ```
 

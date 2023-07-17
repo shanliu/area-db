@@ -16,7 +16,7 @@ pub struct AreaCodeItem {
 }
 
 #[derive(Debug)]
-pub struct AreaCodeFullItem {
+pub struct AreaCodeDetailItem {
     pub selected: bool,
     pub item: AreaCodeItem,
 }
@@ -322,7 +322,7 @@ impl AreaCode {
     }
 
     /// 通过行政区域编码解析出区域
-    pub fn detail(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {
+    pub fn find(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {
         let code_data = Self::code_parse(code);
         if code_data.is_empty() {
             return Ok(vec![]);
@@ -349,7 +349,7 @@ impl AreaCode {
     }
 
     /// 获取行政区域编码同级区域的信息
-    pub fn full_detail(&self, code: &str) -> AreaResult<Vec<Vec<AreaCodeFullItem>>> {
+    pub fn detail(&self, code: &str) -> AreaResult<Vec<Vec<AreaCodeDetailItem>>> {
         let code_data = Self::code_parse(code);
         if code_data.is_empty() {
             return Ok(vec![]);
@@ -368,7 +368,7 @@ impl AreaCode {
                             } else {
                                 false
                             };
-                            AreaCodeFullItem { selected, item: e }
+                            AreaCodeDetailItem { selected, item: e }
                         })
                         .collect::<Vec<_>>(),
                 );
@@ -382,7 +382,7 @@ impl AreaCode {
         if let Some(tmp) = now_list {
             out_list.push(
                 tmp.into_iter()
-                    .map(|e| AreaCodeFullItem {
+                    .map(|e| AreaCodeDetailItem {
                         selected: false,
                         item: e,
                     })
@@ -483,7 +483,7 @@ impl AreaCode {
         }
         let mut out = Vec::with_capacity(heap.len());
         while let Some(max) = heap.pop() {
-            if let Ok(item) = self.detail(max.code) {
+            if let Ok(item) = self.find(max.code) {
                 if item.is_empty() {
                     continue;
                 }
@@ -496,23 +496,4 @@ impl AreaCode {
         out.reverse();
         Ok(out)
     }
-}
-
-#[test]
-fn test_code() {
-    let data = crate::CsvAreaData::new(
-        crate::CsvAreaCodeData::inner_data().unwrap(),
-        Some(crate::CsvAreaGeoData::inner_data().unwrap()),
-    );
-    let area = crate::AreaDao::new(data).unwrap();
-    let res = area.code_detail("4414").unwrap();
-    assert_eq!(res[1].code, "4414");
-    let res = area.code_childs("").unwrap();
-    assert!(res.iter().any(|e| e.code == "44"));
-    let res = area.code_full_detail("441403131203").unwrap();
-    assert_eq!(res.len(), 5);
-    let res = area.code_search("广东 梅州 南口", 10).unwrap();
-    assert_eq!(res[0].item[1].code, "4414");
-    let res = area.geo_search(22.57729, 113.89409).unwrap();
-    assert_eq!(res[2].code, "440306");
 }

@@ -22,10 +22,10 @@ int main() {
         printf("%s [%s]\n",tmp1->name,tmp1->code);
         tmp1++;
     }
-    release_area_vec(area_vec1);
+    release_area_item_vec(area_vec1);
 
     CAreaItemVec* area_vec;
-    if (code_detail("441403131",area_dao,&area_vec,&err)!=0){
+    if (code_find("441403131",area_dao,&area_vec,&err)!=0){
         printf("err:%s",err);
         release_error(err);
         return 0;
@@ -36,7 +36,7 @@ int main() {
         printf("%s [%s]\n",tmp->name,tmp->code);
         tmp++;
     }
-   release_area_vec(area_vec);
-   release_area(area_dao);
+    release_area_item_vec(area_vec);
+    release_area_dao(area_dao);
    return 0;
 }

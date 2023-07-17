@@ -1,5 +1,5 @@
-use crate::{AreaCodeItem, AreaDao};
-use std::ffi::{c_char, c_float, c_int, c_uint, CStr, CString};
+use crate::{AreaCodeDetailItem, AreaCodeItem, AreaDao};
+use std::ffi::{c_char, c_float, c_int, c_uchar, c_uint, CStr, CString};
 
 #[repr(C)]
 pub struct CAreaDao {
@@ -166,7 +166,7 @@ unsafe fn init_area(area_dao: *mut *mut CAreaDao, area_obj: AreaDao) -> c_int {
 /// 不要在RUST调用
 ///
 #[no_mangle]
-pub unsafe extern "C" fn release_area(ptr: *mut CAreaDao) {
+pub unsafe extern "C" fn release_area_dao(ptr: *mut CAreaDao) {
     let boxed_vec_wrapper = unsafe { Box::from_raw(ptr) };
     let boxed_my_struct = unsafe { Box::from_raw(boxed_vec_wrapper.dao) };
     drop(boxed_vec_wrapper);
@@ -188,18 +188,12 @@ pub unsafe extern "C" fn release_error(ptr: *mut c_char) {
 pub struct CAreaItem {
     pub name: *const c_char,
     pub code: *const c_char,
+    pub leaf: c_uchar,
 }
 
 #[repr(C)]
 pub struct CAreaItemVec {
     pub data: *mut CAreaItem,
-    pub len: usize,
-    pub capacity: usize,
-}
-
-#[repr(C)]
-pub struct CAreaItemVecs {
-    pub data: *mut CAreaItemVec,
     pub len: usize,
     pub capacity: usize,
 }
@@ -210,7 +204,7 @@ pub struct CAreaItemVecs {
 /// 不要在RUST调用
 ///
 #[no_mangle]
-pub unsafe extern "C" fn release_area_vec(ptr: *mut CAreaItemVec) {
+pub unsafe extern "C" fn release_area_item_vec(ptr: *mut CAreaItemVec) {
     let boxed_vec_wrapper = unsafe { Box::from_raw(ptr) };
     for i in 0..boxed_vec_wrapper.len {
         let item = &mut *boxed_vec_wrapper.data.add(i);
@@ -218,23 +212,6 @@ pub unsafe extern "C" fn release_area_vec(ptr: *mut CAreaItemVec) {
         let code = CString::from_raw(item.code as *mut c_char);
         drop(name);
         drop(code);
-    }
-    let item = &mut *boxed_vec_wrapper.data;
-    drop(Box::from_raw(item));
-    drop(boxed_vec_wrapper);
-}
-
-/// # Safety
-///
-/// 释放 CAreaItemVecs 内存
-/// 不要在RUST调用
-///
-#[no_mangle]
-pub unsafe extern "C" fn release_area_vecs(ptr: *mut CAreaItemVecs) {
-    let boxed_vec_wrapper = unsafe { Box::from_raw(ptr) };
-    for i in 0..boxed_vec_wrapper.len {
-        let item = &mut *boxed_vec_wrapper.data.add(i);
-        release_area_vec(item)
     }
     let item = &mut *boxed_vec_wrapper.data;
     drop(Box::from_raw(item));
@@ -254,6 +231,7 @@ fn area_item_to_ptr(data: Vec<AreaCodeItem>) -> CAreaItemVec {
         c_data.push(CAreaItem {
             name: name_ptr,
             code: code_ptr,
+            leaf: if tmp.leaf { 1 } else { 0 },
         });
     }
     let data_ptr = c_data.as_mut_ptr();
@@ -262,23 +240,6 @@ fn area_item_to_ptr(data: Vec<AreaCodeItem>) -> CAreaItemVec {
     std::mem::forget(c_data);
     // create a VecWrapper instance
     CAreaItemVec {
-        data: data_ptr,
-        len,
-        capacity,
-    }
-}
-
-//转换RUST的AreaCodeItem数组为 为C的结构
-fn area_item_vec_to_ptr(data: Vec<Vec<AreaCodeItem>>) -> CAreaItemVecs {
-    let mut c_data = vec![];
-    for tmp in data {
-        c_data.push(area_item_to_ptr(tmp));
-    }
-    let data_ptr = c_data.as_mut_ptr();
-    let len = c_data.len();
-    let capacity = c_data.capacity();
-    std::mem::forget(c_data);
-    CAreaItemVecs {
         data: data_ptr,
         len,
         capacity,
@@ -310,7 +271,7 @@ pub unsafe extern "C" fn code_childs(
 /// 不要在RUST调用
 ///
 #[no_mangle]
-pub unsafe extern "C" fn code_detail(
+pub unsafe extern "C" fn code_find(
     code_str: *const c_char,
     area_dao: *mut CAreaDao,
     out_data: *mut *mut CAreaItemVec,
@@ -318,9 +279,49 @@ pub unsafe extern "C" fn code_detail(
 ) -> c_int {
     *error = std::ptr::null_mut();
     let rust_string = cstr_to_string!(code_str, error);
-    let data = call_area_dao!(area_dao, error, code_detail, [&rust_string]);
+    let data = call_area_dao!(area_dao, error, code_find, [&rust_string]);
     *out_data = Box::into_raw(Box::new(area_item_to_ptr(data)));
     0
+}
+
+#[repr(C)]
+pub struct CAreaItemVecs {
+    pub data: *mut CAreaItemVec,
+    pub len: usize,
+    pub capacity: usize,
+}
+/// # Safety
+///
+/// 释放 CAreaItemVecs 内存
+/// 不要在RUST调用
+///
+#[no_mangle]
+pub unsafe extern "C" fn release_area_item_vecs(ptr: *mut CAreaItemVecs) {
+    let boxed_vec_wrapper = unsafe { Box::from_raw(ptr) };
+    for i in 0..boxed_vec_wrapper.len {
+        let item = &mut *boxed_vec_wrapper.data.add(i);
+        release_area_item_vec(item)
+    }
+    let item = &mut *boxed_vec_wrapper.data;
+    drop(Box::from_raw(item));
+    drop(boxed_vec_wrapper);
+}
+
+//转换RUST的AreaCodeItem数组为 为C的结构
+fn area_item_vec_to_ptr(data: Vec<Vec<AreaCodeItem>>) -> CAreaItemVecs {
+    let mut c_data = vec![];
+    for tmp in data {
+        c_data.push(area_item_to_ptr(tmp));
+    }
+    let data_ptr = c_data.as_mut_ptr();
+    let len = c_data.len();
+    let capacity = c_data.capacity();
+    std::mem::forget(c_data);
+    CAreaItemVecs {
+        data: data_ptr,
+        len,
+        capacity,
+    }
 }
 
 /// # Safety
@@ -342,6 +343,119 @@ pub unsafe extern "C" fn code_search(
     *out_data = Box::into_raw(Box::new(area_item_vec_to_ptr(
         data.into_iter().map(|e| e.item).collect::<Vec<_>>(),
     )));
+    0
+}
+
+#[repr(C)]
+pub struct CAreaDetailItem {
+    pub name: *const c_char,
+    pub code: *const c_char,
+    pub selected: c_uchar,
+    pub leaf: c_uchar,
+}
+
+#[repr(C)]
+pub struct CAreaDetailItemVec {
+    pub data: *mut CAreaDetailItem,
+    pub len: usize,
+    pub capacity: usize,
+}
+
+#[repr(C)]
+pub struct CAreaDetailItemVecs {
+    pub data: *mut CAreaDetailItemVec,
+    pub len: usize,
+    pub capacity: usize,
+}
+/// # Safety
+///
+/// 释放 CAreaDetailItemVecs 内存
+/// 不要在RUST调用
+///
+#[no_mangle]
+pub unsafe extern "C" fn release_area_detail_vecs(ptr: *mut CAreaDetailItemVecs) {
+    let boxed_vec_wrapper = unsafe { Box::from_raw(ptr) };
+    for i in 0..boxed_vec_wrapper.len {
+        let item = &mut *boxed_vec_wrapper.data.add(i);
+        let boxed_vec_wrapper = unsafe { Box::from_raw(item) };
+        for i in 0..boxed_vec_wrapper.len {
+            let item = &mut *boxed_vec_wrapper.data.add(i);
+            let name = CString::from_raw(item.name as *mut c_char);
+            let code = CString::from_raw(item.code as *mut c_char);
+            drop(name);
+            drop(code);
+        }
+        let item = &mut *boxed_vec_wrapper.data;
+        drop(Box::from_raw(item));
+        drop(boxed_vec_wrapper);
+    }
+    let item = &mut *boxed_vec_wrapper.data;
+    drop(Box::from_raw(item));
+    drop(boxed_vec_wrapper);
+}
+
+//转换RUST的AreaCodeItem 为C的结构
+fn area_detail_item_to_ptr(data: Vec<AreaCodeDetailItem>) -> CAreaDetailItemVec {
+    let mut c_data = vec![];
+    for tmp in data {
+        let name = CString::new(tmp.item.name).unwrap_or_default();
+        let name_ptr = name.as_ptr();
+        let code = CString::new(tmp.item.code).unwrap_or_default();
+        let code_ptr = code.as_ptr();
+        std::mem::forget(name);
+        std::mem::forget(code);
+        c_data.push(CAreaDetailItem {
+            name: name_ptr,
+            code: code_ptr,
+            selected: if tmp.selected { 1 } else { 0 },
+            leaf: if tmp.item.leaf { 1 } else { 0 },
+        });
+    }
+    let data_ptr = c_data.as_mut_ptr();
+    let len = c_data.len();
+    let capacity = c_data.capacity();
+    std::mem::forget(c_data);
+    // create a VecWrapper instance
+    CAreaDetailItemVec {
+        data: data_ptr,
+        len,
+        capacity,
+    }
+}
+
+//转换RUST的AreaCodeItem数组为 为C的结构
+fn area_detail_item_vec_to_ptr(data: Vec<Vec<AreaCodeDetailItem>>) -> CAreaDetailItemVecs {
+    let mut c_data = vec![];
+    for tmp in data {
+        c_data.push(area_detail_item_to_ptr(tmp));
+    }
+    let data_ptr = c_data.as_mut_ptr();
+    let len = c_data.len();
+    let capacity = c_data.capacity();
+    std::mem::forget(c_data);
+    CAreaDetailItemVecs {
+        data: data_ptr,
+        len,
+        capacity,
+    }
+}
+
+/// # Safety
+///
+/// 根据地区CODE查询地址数据
+/// 不要在RUST调用
+///
+#[no_mangle]
+pub unsafe extern "C" fn code_detail(
+    code_str: *const c_char,
+    area_dao: *mut CAreaDao,
+    out_data: *mut *mut CAreaDetailItemVecs,
+    error: *mut *mut c_char,
+) -> c_int {
+    *error = std::ptr::null_mut();
+    let rust_string = cstr_to_string!(code_str, error);
+    let data = call_area_dao!(area_dao, error, code_detail, [&rust_string]);
+    *out_data = Box::into_raw(Box::new(area_detail_item_vec_to_ptr(data)));
     0
 }
 

@@ -47,17 +47,36 @@ impl AreaDao {
     pub fn code_childs(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {
         self.code.childs(code)
     }
-    pub fn code_detail(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {
-        self.code.detail(code)
+    pub fn code_find(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {
+        self.code.find(code)
     }
-    pub fn code_full_detail(&self, code: &str) -> AreaResult<Vec<Vec<AreaCodeFullItem>>> {
-        self.code.full_detail(code)
+    pub fn code_detail(&self, code: &str) -> AreaResult<Vec<Vec<AreaCodeDetailItem>>> {
+        self.code.detail(code)
     }
     pub fn code_search(&self, name: &str, limit: usize) -> AreaResult<Vec<AreaSearchItem>> {
         self.code.search(name, limit)
     }
     pub fn geo_search(&self, lat: f64, lng: f64) -> AreaResult<Vec<AreaCodeItem>> {
         let code = self.geo.search(&geo::coord! { x:lng, y:lat})?;
-        self.code.detail(code)
+        self.code.find(code)
     }
+}
+
+#[test]
+fn test_code() {
+    let data = crate::CsvAreaData::new(
+        crate::CsvAreaCodeData::inner_data().unwrap(),
+        Some(crate::CsvAreaGeoData::inner_data().unwrap()),
+    );
+    let area = crate::AreaDao::new(data).unwrap();
+    let res = area.code_find("4414").unwrap();
+    assert_eq!(res[1].code, "4414");
+    let res = area.code_childs("").unwrap();
+    assert!(res.iter().any(|e| e.code == "44"));
+    let res = area.code_detail("441403131203").unwrap();
+    assert_eq!(res.len(), 5);
+    let res = area.code_search("广东 梅州 南口", 10).unwrap();
+    assert_eq!(res[0].item[1].code, "4414");
+    let res = area.geo_search(22.57729, 113.89409).unwrap();
+    assert_eq!(res[2].code, "440306");
 }

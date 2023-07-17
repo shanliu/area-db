@@ -20,6 +20,6 @@ else()
     target_link_libraries(area_dome area_lib)
 endif ()
 
-#windows add path
+#windows:add dll path to env
 #PATH=../target/release or PATH=../target/debug 
 
