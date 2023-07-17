@@ -40,7 +40,7 @@ crate-type = ["cdylib","rlib"]
 default=[
     "data-csv-embed-geo",
     "data-csv-embed-code",
-   "data-sqlite-source",
+  # "data-sqlite-source",
     #"data-mysql",
     "lib-clib"
 ]
