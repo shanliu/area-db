@@ -222,6 +222,10 @@ impl AreaCode {
         name.to_owned()
     }
     pub(crate) fn code_parse(code: &str) -> Vec<&str> {
+        let code = code.trim();
+        if code.is_empty() {
+            return vec![];
+        }
         let len = code.len();
         let mut search_code = vec![];
         let mut start = 0;
@@ -395,6 +399,9 @@ impl AreaCode {
     /// 通过部分地址获取可能区域
     pub fn search(&self, name: &str, limit: usize) -> AreaResult<Vec<AreaSearchItem>> {
         let name = name.trim();
+        if name.is_empty() {
+            return Ok(vec![]);
+        }
         let num_cpus = num_cpus::get();
         let ename = name.replace(' ', "").to_lowercase();
         let mut heap = BinaryHeap::new();

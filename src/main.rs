@@ -35,7 +35,6 @@ fn main() {
     if matches.value_of("find").is_some()
         || matches.value_of("child").is_some()
         || matches.value_of("search").is_some()
-        || matches.value_of("detail").is_some()
         || matches.value_of("geo").is_some()
     {
         println!("开始构建索引");
