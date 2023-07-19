@@ -4,6 +4,7 @@ mod area_code;
 pub use area_code::*;
 mod area_geo;
 pub use area_geo::*;
+use parking_lot::RwLock;
 
 use std::{
     error::Error,
@@ -31,30 +32,41 @@ pub trait AreaDataProvider {
 }
 
 pub struct AreaDao {
-    code: AreaCode,
-    geo: AreaGeo,
+    provider: Box<dyn AreaDataProvider>,
+    code: RwLock<AreaCode>,
+    geo: RwLock<AreaGeo>,
 }
 
 impl AreaDao {
-    pub fn new(data: impl AreaDataProvider) -> AreaResult<Self> {
-        let area_code_data = data.read_code_data()?;
-        let area_geo_data = data.read_geo_data()?;
+    pub fn new(provider: impl AreaDataProvider + 'static) -> AreaResult<Self> {
+        let area_code_data = provider.read_code_data()?;
+        let area_geo_data = provider.read_geo_data()?;
         Ok(Self {
-            code: AreaCode::new(&area_code_data),
-            geo: AreaGeo::new(&area_geo_data),
+            provider: Box::new(provider),
+            code: RwLock::new(AreaCode::new(&area_code_data)),
+            geo: RwLock::new(AreaGeo::new(&area_geo_data)),
         })
     }
+    pub fn reload(self) -> AreaResult<Self> {
+        let area_code_data = self.provider.read_code_data()?;
+        let code = AreaCode::new(&area_code_data);
+        let area_geo_data = self.provider.read_geo_data()?;
+        let geo = AreaGeo::new(&area_geo_data);
+        *self.code.write() = code;
+        *self.geo.write() = geo;
+        Ok(self)
+    }
     pub fn code_childs(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {
-        self.code.childs(code).map(|mut e| {
+        self.code.read().childs(code).map(|mut e| {
             e.sort_by(|a, b| a.code.cmp(&b.code));
             e
         })
     }
     pub fn code_find(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {
-        self.code.find(code)
+        self.code.read().find(code)
     }
     pub fn code_detail(&self, code: &str) -> AreaResult<Vec<Vec<AreaCodeDetailItem>>> {
-        self.code.detail(code).map(|e| {
+        self.code.read().detail(code).map(|e| {
             e.into_iter()
                 .map(|mut ie| {
                     ie.sort_by(|a, b| a.item.code.cmp(&b.item.code));
@@ -66,7 +78,7 @@ impl AreaDao {
     pub fn code_search(&self, name: &str, limit: usize) -> AreaResult<Vec<AreaSearchItem>> {
         if name.trim().is_empty() {
             let mut out = Vec::with_capacity(limit);
-            while let Ok(tmp) = self.code.childs("") {
+            while let Ok(tmp) = self.code.read().childs("") {
                 out.push(AreaSearchItem {
                     item: tmp,
                     key_word: "".to_string(),
@@ -74,11 +86,12 @@ impl AreaDao {
             }
             return Ok(out);
         }
-        self.code.search(name, limit)
+        self.code.read().search(name, limit)
     }
     pub fn geo_search(&self, lat: f64, lng: f64) -> AreaResult<Vec<AreaCodeItem>> {
-        let code = self.geo.search(&geo::coord! { x:lng, y:lat})?;
-        self.code.find(code)
+        let tmp = self.geo.read();
+        let code = tmp.search(&geo::coord! { x:lng, y:lat})?;
+        self.code.read().find(code)
     }
 }
 
