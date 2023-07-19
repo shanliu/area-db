@@ -45,15 +45,35 @@ impl AreaDao {
         })
     }
     pub fn code_childs(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {
-        self.code.childs(code)
+        self.code.childs(code).map(|mut e| {
+            e.sort_by(|a, b| a.code.cmp(&b.code));
+            e
+        })
     }
     pub fn code_find(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {
         self.code.find(code)
     }
     pub fn code_detail(&self, code: &str) -> AreaResult<Vec<Vec<AreaCodeDetailItem>>> {
-        self.code.detail(code)
+        self.code.detail(code).map(|e| {
+            e.into_iter()
+                .map(|mut ie| {
+                    ie.sort_by(|a, b| a.item.code.cmp(&b.item.code));
+                    ie
+                })
+                .collect::<Vec<_>>()
+        })
     }
     pub fn code_search(&self, name: &str, limit: usize) -> AreaResult<Vec<AreaSearchItem>> {
+        if name.trim().is_empty() {
+            let mut out = Vec::with_capacity(limit);
+            while let Ok(tmp) = self.code.childs("") {
+                out.push(AreaSearchItem {
+                    item: tmp,
+                    key_word: "".to_string(),
+                })
+            }
+            return Ok(out);
+        }
         self.code.search(name, limit)
     }
     pub fn geo_search(&self, lat: f64, lng: f64) -> AreaResult<Vec<AreaCodeItem>> {
