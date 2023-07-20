@@ -40,7 +40,7 @@ pub struct AreaDao {
 }
 
 impl AreaDao {
-    pub fn new(provider: impl AreaDataProvider + 'static) -> AreaResult<Self> {
+    pub fn new(provider: impl AreaDataProvider + 'static + Sync) -> AreaResult<Self> {
         let tmp = provider.read_code_data()?;
         let code = AreaCode::new(&tmp);
         drop(tmp);
