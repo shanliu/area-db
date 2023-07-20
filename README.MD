@@ -43,7 +43,7 @@
 #data-csv-embed-code 省市县镇村 数据
 #data-csv-embed-geo 县级坐标 数据
 #lib-clib 输出c的动态库,用于其他语言对接
-area-db = { version = "0.0.1",git = "https://github.com/shanliu/area-db"}
+area-db = { version = "~0.0.*",git = "https://github.com/shanliu/area-db"}
 ```
 
 > 如果不需要导出c的动态库，可以 使用 `default-features=false` 及不引入 `lib-clib` 来实现 
@@ -59,7 +59,7 @@ area-db = { version = "0.0.1",git = "https://github.com/shanliu/area-db"}
 
 ```toml
 #cargo.toml
-area-db = { version = "0.0.1", default-features=false,features=["data-csv-embed-code","data-csv-embed-geo"],git = "https://github.com/shanliu/area-db"}
+area-db = { version = "~0.0.*", default-features=false,features=["data-csv-embed-code","data-csv-embed-geo"],git = "https://github.com/shanliu/area-db"}
 ```
 
 ```rust
@@ -76,7 +76,7 @@ let area = area_lib::AreaDao::new(data).unwrap();
 
 ```toml
 #cargo.toml
-area-db = { version = "0.0.1", default-features=false,features=["data-csv"],git = "https://github.com/shanliu/area-db"}
+area-db = { version = "~0.0.*", default-features=false,features=["data-csv"],git = "https://github.com/shanliu/area-db"}
 ```
 
 ```rust
@@ -97,7 +97,7 @@ let area = area_lib::AreaDao::new(data).unwrap();
 
 ```toml
 #cargo.toml
-area-db = { version = "0.0.1", default-features=false,features=["data-sqlite-source"],git = "https://github.com/shanliu/area-db"}
+area-db = { version = "~0.0.*", default-features=false,features=["data-sqlite-source"],git = "https://github.com/shanliu/area-db"}
 ```
 
 ```rust
@@ -116,11 +116,11 @@ let area = area_lib::AreaDao::new(sqlite).unwrap();
 
 ```toml
 #cargo.toml
-area-db = { version = "0.0.1", default-features=false,features=["data-mysql"],git = "https://github.com/shanliu/area-db"}
+area-db = { version = "~0.0.*", default-features=false,features=["data-mysql"],git = "https://github.com/shanliu/area-db"}
 ```
 
 ```rust
-let pool = mysql::Pool::new("mysql://***:***@127.0.0.1:3306/***").unwrap();
+let pool = mysql::Pool::new("mysql://***:***@127.~0.0.*:3306/***").unwrap();
 let mysql = area_lib::MysqlAreaData::new(
     area_lib::MysqlAreaCodeData::from_conn(pool.clone()),
     Some(area_lib::MysqlAreaGeoData::from_conn(pool)),
