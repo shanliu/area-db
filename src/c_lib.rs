@@ -74,6 +74,7 @@ pub unsafe extern "C" fn init_area_csv(
     area_dao: *mut *mut CAreaDao,
     error: *mut *mut c_char,
 ) -> c_int {
+    use std::path::PathBuf;
     *error = std::ptr::null_mut();
     *area_dao = std::ptr::null_mut();
     let code_file = cstr_to_string!(code_path, error);
@@ -83,13 +84,13 @@ pub unsafe extern "C" fn init_area_csv(
         #[cfg(feature = "data-csv-embed-code")]
         {
             code_config = Some(unwrap_or_c_error!(
-                crate::CsvAreaCodeData::inner_data(),
+                crate::CsvAreaCodeData::from_inner_data(),
                 error
             ));
         }
     } else {
         code_config = Some(unwrap_or_c_error!(
-            crate::CsvAreaCodeData::path(&code_file),
+            crate::CsvAreaCodeData::from_inner_path(PathBuf::from(code_file)),
             error
         ));
     };
@@ -107,13 +108,13 @@ pub unsafe extern "C" fn init_area_csv(
         #[cfg(feature = "data-csv-embed-code")]
         {
             geo_config = Some(unwrap_or_c_error!(
-                crate::CsvAreaGeoData::inner_data(),
+                crate::CsvAreaGeoData::from_inner_data(),
                 error
             ));
         }
     } else {
         geo_config = Some(unwrap_or_c_error!(
-            crate::CsvAreaGeoData::path(&geo_file),
+            crate::CsvAreaGeoData::from_inner_path(PathBuf::from(geo_file)),
             error
         ));
     }
@@ -136,6 +137,7 @@ pub unsafe extern "C" fn init_area_sqlite(
     area_dao: *mut *mut CAreaDao,
     error: *mut *mut c_char,
 ) -> c_int {
+    use std::path::PathBuf;
     *error = std::ptr::null_mut();
     *area_dao = std::ptr::null_mut();
     let file_config = cstr_to_string!(db_path, error);
@@ -143,18 +145,44 @@ pub unsafe extern "C" fn init_area_sqlite(
         set_c_error!("sqlite path can't be empty", error);
         return 1;
     }
-    let conn = unwrap_or_c_error!(rusqlite::Connection::open(&file_config), error);
-    let code_config = crate::SqliteAreaCodeData::from_conn(&conn);
-    let geo_config = Some(crate::SqliteAreaGeoData::from_conn(&conn));
+    let code_config = crate::SqliteAreaCodeData::from_path(PathBuf::from(&file_config));
+    let geo_config = Some(crate::SqliteAreaGeoData::from_path(PathBuf::from(
+        &file_config,
+    )));
     let area_obj = unwrap_or_c_error!(
         AreaDao::new(crate::SqliteAreaData::new(code_config, geo_config)),
         error
     );
     init_area(area_dao, area_obj)
 }
+
 #[allow(dead_code)]
 unsafe fn init_area(area_dao: *mut *mut CAreaDao, area_obj: AreaDao) -> c_int {
     let area_ptr = Box::into_raw(Box::new(area_obj));
+    let area_box = Box::into_raw(Box::new(CAreaDao { dao: area_ptr }));
+    *area_dao = area_box;
+    0
+}
+
+/// # Safety
+///
+/// 用于外部C函数调用进行初始化结构
+/// 不要在RUST调用
+///
+#[no_mangle]
+pub unsafe extern "C" fn reload_area_dao(
+    area_dao: *mut *mut CAreaDao,
+    error: *mut *mut c_char,
+) -> c_int {
+    *error = std::ptr::null_mut();
+    if area_dao.is_null() {
+        return 0;
+    }
+    let boxed_vec_wrapper = unsafe { Box::from_raw(*area_dao) };
+    let mut boxed_my_struct = unsafe { Box::from_raw(boxed_vec_wrapper.dao) };
+    unwrap_or_c_error!(boxed_my_struct.reload(), error);
+    drop(boxed_vec_wrapper);
+    let area_ptr = Box::into_raw(boxed_my_struct);
     let area_box = Box::into_raw(Box::new(CAreaDao { dao: area_ptr }));
     *area_dao = area_box;
     0
@@ -167,6 +195,9 @@ unsafe fn init_area(area_dao: *mut *mut CAreaDao, area_obj: AreaDao) -> c_int {
 ///
 #[no_mangle]
 pub unsafe extern "C" fn release_area_dao(ptr: *mut CAreaDao) {
+    if ptr.is_null() {
+        return;
+    }
     let boxed_vec_wrapper = unsafe { Box::from_raw(ptr) };
     let boxed_my_struct = unsafe { Box::from_raw(boxed_vec_wrapper.dao) };
     drop(boxed_vec_wrapper);

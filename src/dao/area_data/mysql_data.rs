@@ -1,4 +1,4 @@
-use mysql::{prelude::Queryable, Pool, Row};
+use mysql::{prelude::Queryable, Conn, Opts, Row};
 
 use crate::{AreaCodeData, AreaDataProvider, AreaError, AreaGeoData, AreaGeoDataItem, AreaResult};
 
@@ -7,60 +7,62 @@ impl From<mysql::Error> for AreaError {
         AreaError::DB(err.to_string())
     }
 }
+impl From<mysql::UrlError> for AreaError {
+    fn from(err: mysql::UrlError) -> Self {
+        AreaError::DB(err.to_string())
+    }
+}
 
-pub struct MysqlAreaCodeData<'t> {
-    pub pool: Pool,
-    pub sql: &'t str,
-    pub column_name: &'t str,
-    pub column_code: &'t str,
-    pub column_hide: &'t str,
-    pub column_key_word: &'t str,
+pub struct MysqlAreaCodeData {
+    pub uri: String,
+    pub sql: String,
+    pub column_name: String,
+    pub column_code: String,
+    pub column_hide: String,
+    pub column_key_word: String,
     pub key_word_name: bool,
 }
 
-impl<'t> MysqlAreaCodeData<'t> {
-    pub fn from_conn(pool: Pool) -> Self {
+impl MysqlAreaCodeData {
+    pub fn from_conn(uri: String) -> Self {
         Self {
-            pool,
-            sql: "select name,code,hide,key_word from area_code",
-            column_name: "name",
-            column_code: "code",
-            column_hide: "hide",
-            column_key_word: "key_word",
+            uri,
+            sql: "select name,code,hide,key_word from area_code".to_string(),
+            column_name: "name".to_string(),
+            column_code: "code".to_string(),
+            column_hide: "hide".to_string(),
+            column_key_word: "key_word".to_string(),
             key_word_name: true,
         }
     }
 }
 
-pub struct MysqlAreaGeoData<'t> {
-    pub pool: Pool,
-    pub sql: &'t str,
-    pub column_code: &'t str,
-    pub column_center: &'t str,
-    pub column_polygon: &'t str,
+pub struct MysqlAreaGeoData {
+    pub uri: String,
+    pub sql: String,
+    pub column_code: String,
+    pub column_center: String,
+    pub column_polygon: String,
 }
 
-impl<'t> MysqlAreaGeoData<'t> {
-    pub fn from_conn(pool: Pool) -> Self {
+impl MysqlAreaGeoData {
+    pub fn from_conn(uri: String) -> Self {
         Self {
-            pool,
-            sql: "select code,center,polygon from area_geo where code in ('0') or code like '______%'",
-            column_code: "code",
-            column_center: "center",
-            column_polygon: "polygon",
+            uri,
+            sql: "select code,center,polygon from area_geo where code in ('0') or code like '______%'".to_string(),
+            column_code: "code".to_string(),
+            column_center: "center".to_string(),
+            column_polygon: "polygon".to_string(),
         }
     }
 }
 
-pub struct MysqlAreaData<'t> {
-    code_config: MysqlAreaCodeData<'t>,
-    geo_config: Option<MysqlAreaGeoData<'t>>,
+pub struct MysqlAreaData {
+    code_config: MysqlAreaCodeData,
+    geo_config: Option<MysqlAreaGeoData>,
 }
-impl<'t> MysqlAreaData<'t> {
-    pub fn new(
-        code_config: MysqlAreaCodeData<'t>,
-        geo_config: Option<MysqlAreaGeoData<'t>>,
-    ) -> Self {
+impl MysqlAreaData {
+    pub fn new(code_config: MysqlAreaCodeData, geo_config: Option<MysqlAreaGeoData>) -> Self {
         Self {
             code_config,
             geo_config,
@@ -68,18 +70,19 @@ impl<'t> MysqlAreaData<'t> {
     }
 }
 
-impl<'t> AreaDataProvider for MysqlAreaData<'t> {
+impl AreaDataProvider for MysqlAreaData {
     fn read_code_data(&self) -> AreaResult<Vec<AreaCodeData>> {
-        let mut conn = self.code_config.pool.get_conn()?;
-        let result: Vec<Row> = conn.query(self.code_config.sql).unwrap();
+        let opt = Opts::try_from(self.code_config.uri.as_str())?;
+        let mut conn = Conn::new(opt)?;
+        let result: Vec<Row> = conn.query(self.code_config.sql.as_str())?;
         Ok(result
             .into_iter()
             .flat_map(|row| {
-                if let Some(code) = row.get(self.code_config.column_code) {
-                    let hide = row.get(self.code_config.column_hide).unwrap_or(0);
-                    let name: Option<String> = row.get(self.code_config.column_name);
+                if let Some(code) = row.get(self.code_config.column_code.as_str()) {
+                    let hide = row.get(self.code_config.column_hide.as_str()).unwrap_or(0);
+                    let name: Option<String> = row.get(self.code_config.column_name.as_str());
                     let keyword: String = row
-                        .get(self.code_config.column_key_word)
+                        .get(self.code_config.column_key_word.as_str())
                         .unwrap_or_default();
                     let mut key_word = keyword
                         .split(',')
@@ -106,18 +109,19 @@ impl<'t> AreaDataProvider for MysqlAreaData<'t> {
     fn read_geo_data(&self) -> AreaResult<Vec<AreaGeoData>> {
         match &self.geo_config {
             Some(get_config) => {
-                let mut conn = get_config.pool.get_conn()?;
-                let result: Vec<Row> = conn.query(get_config.sql).unwrap();
+                let opt = Opts::try_from(get_config.uri.as_str())?;
+                let mut conn = Conn::new(opt)?;
+                let result: Vec<Row> = conn.query(get_config.sql.as_str())?;
                 Ok(result
                     .into_iter()
                     .flat_map(|row| {
-                        if let Some(code) = row.get(get_config.column_code) {
-                            if let Some(polygon) = row.get(get_config.column_polygon) {
+                        if let Some(code) = row.get(get_config.column_code.as_str()) {
+                            if let Some(polygon) = row.get(get_config.column_polygon.as_str()) {
                                 return Some(AreaGeoData {
                                     code,
                                     item: vec![AreaGeoDataItem {
                                         center: row
-                                            .get(get_config.column_center)
+                                            .get(get_config.column_center.as_str())
                                             .unwrap_or_default(),
                                         polygon,
                                     }],
@@ -130,5 +134,11 @@ impl<'t> AreaDataProvider for MysqlAreaData<'t> {
             }
             None => Ok(vec![]),
         }
+    }
+    fn code_data_is_change(&self) -> bool {
+        true
+    }
+    fn geo_data_is_change(&self) -> bool {
+        true
     }
 }

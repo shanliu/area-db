@@ -108,7 +108,7 @@ impl AreaCode {
     pub fn new(area_code_data: &[AreaCodeData]) -> Self {
         let mut code_data = HashMap::with_capacity(area_code_data.len());
         let mut code_area_data = HashMap::<String, AreaCodeIndex>::new();
-        for tmp_area in area_code_data {
+        for tmp_area in area_code_data.iter() {
             let mut code_name = tmp_area.name.as_str();
             for tcc in CLEAR_WORD {
                 if code_name.ends_with(tcc) {

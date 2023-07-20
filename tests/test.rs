@@ -1,44 +1,60 @@
-// #[test]
-// fn test_mysql() {
-//     let pool = mysql::Pool::new("mysql://root:000@127.0.0.1:3306/test").unwrap();
-//     let mysql = area_lib::MysqlAreaData::new(
-//         area_lib::MysqlAreaCodeData::from_conn(pool.clone()),
-//         Some(area_lib::MysqlAreaGeoData::from_conn(pool)),
-//     );
-//     let area = area_lib::AreaDao::new(mysql).unwrap();
-//     test_branch(area)
-// }
-// #[test]
-// fn test_sqlite() {
-//     let conn = rusqlite::Connection::open("data/area-data.db").unwrap();
-//     let sqlite = area_lib::SqliteAreaData::new(
-//         area_lib::SqliteAreaCodeData::from_conn(&conn),
-//         Some(area_lib::SqliteAreaGeoData::from_conn(&conn)),
-//     );
-//     let area = area_lib::AreaDao::new(sqlite).unwrap();
-//     drop(conn);
-//     test_branch(area)
-// }
-// #[test]
-// fn test_csv() {
-//     let data = area_lib::CsvAreaData::new(
-//         area_lib::CsvAreaCodeData::path("data/2023-7-area-code.csv").unwrap(),
-//         Some(area_lib::CsvAreaGeoData::path("data/2023-7-area-geo.csv").unwrap()),
-//     );
-//     test_branch(area_lib::AreaDao::new(data).unwrap())
-// }
+#[cfg(feature = "data-mysql")]
+#[test]
+fn test_mysql() {
+    let uri = "mysql://root:000@127.0.0.1:3306/test";
+    let mysql = area_lib::MysqlAreaData::new(
+        area_lib::MysqlAreaCodeData::from_conn(uri.to_string()),
+        Some(area_lib::MysqlAreaGeoData::from_conn(uri.to_string())),
+    );
+    let area = area_lib::AreaDao::new(mysql).unwrap();
+    test_branch(&area);
+    let area = area.reload().unwrap();
+    test_branch(&area);
+}
+#[cfg(any(feature = "data-sqlite", feature = "data-sqlite-source"))]
+#[test]
+fn test_sqlite() {
+    use std::path::PathBuf;
+    let uri = "data/area-data.db";
+    let sqlite = area_lib::SqliteAreaData::new(
+        area_lib::SqliteAreaCodeData::from_path(PathBuf::from(uri)),
+        Some(area_lib::SqliteAreaGeoData::from_path(PathBuf::from(uri))),
+    );
+    let area = area_lib::AreaDao::new(sqlite).unwrap();
+    test_branch(&area);
+    let area = area.reload().unwrap();
+    test_branch(&area);
+}
+
+#[cfg(feature = "data-csv")]
+#[test]
+fn test_csv() {
+    use std::path::PathBuf;
+    let data = area_lib::CsvAreaData::new(
+        area_lib::CsvAreaCodeData::from_inner_path(PathBuf::from("data/2023-7-area-code.csv"))
+            .unwrap(),
+        Some(
+            area_lib::CsvAreaGeoData::from_inner_path(PathBuf::from("data/2023-7-area-geo.csv"))
+                .unwrap(),
+        ),
+    );
+    test_branch(&area_lib::AreaDao::new(data).unwrap());
+}
+
+#[cfg(all(feature = "data-csv-embed-geo", feature = "data-csv-embed-code"))]
 #[test]
 fn test_inner() {
     let data = area_lib::CsvAreaData::new(
-        area_lib::CsvAreaCodeData::inner_data().unwrap(),
-        Some(area_lib::CsvAreaGeoData::inner_data().unwrap()),
+        area_lib::CsvAreaCodeData::from_inner_data().unwrap(),
+        Some(area_lib::CsvAreaGeoData::from_inner_data().unwrap()),
     );
-    test_branch(area_lib::AreaDao::new(data).unwrap())
+    test_branch(&area_lib::AreaDao::new(data).unwrap());
 }
-fn test_branch(area: area_lib::AreaDao) {
+#[allow(dead_code)]
+fn test_branch(area: &area_lib::AreaDao) {
     for _ in 0..10 {
         let start = std::time::Instant::now();
-        area.code_childs("441403133").unwrap();
+        area.code_childs("441403").unwrap();
         let duration = start.elapsed();
         println!("code_childs is: {:?}", duration);
     }

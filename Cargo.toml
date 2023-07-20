@@ -41,8 +41,8 @@ crate-type = ["cdylib","rlib"]
 default=[
     "data-csv-embed-geo",
     "data-csv-embed-code",
-  # "data-sqlite-source",
-    #"data-mysql",
+    # "data-sqlite-source",
+    # "data-mysql",
     "lib-clib"
 ]
 #启用C库接口

@@ -28,7 +28,9 @@ pub type AreaResult<T> = Result<T, AreaError>;
 
 pub trait AreaDataProvider {
     fn read_code_data(&self) -> AreaResult<Vec<AreaCodeData>>;
+    fn code_data_is_change(&self) -> bool;
     fn read_geo_data(&self) -> AreaResult<Vec<AreaGeoData>>;
+    fn geo_data_is_change(&self) -> bool;
 }
 
 pub struct AreaDao {
@@ -39,22 +41,32 @@ pub struct AreaDao {
 
 impl AreaDao {
     pub fn new(provider: impl AreaDataProvider + 'static) -> AreaResult<Self> {
-        let area_code_data = provider.read_code_data()?;
-        let area_geo_data = provider.read_geo_data()?;
+        let tmp = provider.read_code_data()?;
+        let code = AreaCode::new(&tmp);
+        drop(tmp);
+        let tmp = provider.read_geo_data()?;
+        let geo = AreaGeo::new(&tmp);
+        drop(tmp);
         Ok(Self {
             provider: Box::new(provider),
-            code: RwLock::new(AreaCode::new(&area_code_data)),
-            geo: RwLock::new(AreaGeo::new(&area_geo_data)),
+            code: RwLock::new(code),
+            geo: RwLock::new(geo),
         })
     }
-    pub fn reload(self) -> AreaResult<Self> {
-        let area_code_data = self.provider.read_code_data()?;
-        let code = AreaCode::new(&area_code_data);
-        let area_geo_data = self.provider.read_geo_data()?;
-        let geo = AreaGeo::new(&area_geo_data);
-        *self.code.write() = code;
-        *self.geo.write() = geo;
-        Ok(self)
+    pub fn reload(&mut self) -> AreaResult<()> {
+        if self.provider.code_data_is_change() {
+            let tmp = self.provider.read_code_data()?;
+            let code = AreaCode::new(&tmp);
+            drop(tmp);
+            *self.code.write() = code;
+        }
+        if self.provider.geo_data_is_change() {
+            let tmp = self.provider.read_geo_data()?;
+            let geo = AreaGeo::new(&tmp);
+            drop(tmp);
+            *self.geo.write() = geo;
+        }
+        Ok(())
     }
     pub fn code_childs(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {
         self.code.read().childs(code).map(|mut e| {
@@ -95,11 +107,12 @@ impl AreaDao {
     }
 }
 
+#[cfg(all(feature = "data-csv-embed-geo", feature = "data-csv-embed-code"))]
 #[test]
 fn test_code() {
     let data = crate::CsvAreaData::new(
-        crate::CsvAreaCodeData::inner_data().unwrap(),
-        Some(crate::CsvAreaGeoData::inner_data().unwrap()),
+        crate::CsvAreaCodeData::from_inner_data().unwrap(),
+        Some(crate::CsvAreaGeoData::from_inner_data().unwrap()),
     );
     let area = crate::AreaDao::new(data).unwrap();
     let res = area.code_find("4414").unwrap();
