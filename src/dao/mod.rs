@@ -34,7 +34,7 @@ pub trait AreaDataProvider {
 }
 
 pub struct AreaDao {
-    provider: Box<dyn AreaDataProvider>,
+    provider: Box<dyn AreaDataProvider + 'static + Sync + Send>,
     code: RwLock<AreaCode>,
     geo: RwLock<AreaGeo>,
 }
