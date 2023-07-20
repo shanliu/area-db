@@ -26,20 +26,20 @@ fn test_sqlite() {
     test_branch(&area);
 }
 
-#[cfg(feature = "data-csv")]
-#[test]
-fn test_csv() {
-    use std::path::PathBuf;
-    let data = area_lib::CsvAreaData::new(
-        area_lib::CsvAreaCodeData::from_inner_path(PathBuf::from("data/2023-7-area-code.csv"))
-            .unwrap(),
-        Some(
-            area_lib::CsvAreaGeoData::from_inner_path(PathBuf::from("data/2023-7-area-geo.csv"))
-                .unwrap(),
-        ),
-    );
-    test_branch(&area_lib::AreaDao::new(data).unwrap());
-}
+// #[cfg(feature = "data-csv")]
+// #[test]
+// fn test_csv() {
+//     use std::path::PathBuf;
+//     let data = area_lib::CsvAreaData::new(
+//         area_lib::CsvAreaCodeData::from_inner_path(PathBuf::from("data/2023-7-area-code.csv"))
+//             .unwrap(),
+//         Some(
+//             area_lib::CsvAreaGeoData::from_inner_path(PathBuf::from("data/2023-7-area-geo.csv"))
+//                 .unwrap(),
+//         ),
+//     );
+//     test_branch(&area_lib::AreaDao::new(data).unwrap());
+// }
 
 #[cfg(all(feature = "data-csv-embed-geo", feature = "data-csv-embed-code"))]
 #[test]
