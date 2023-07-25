@@ -33,19 +33,7 @@ fn test_sqlite() {
 #[cfg(feature = "data-csv")]
 #[test]
 fn test_csv() {
-    use std::path::PathBuf;
-    let code_path = PathBuf::from(format!(
-        "{}/data/2023-7-area-code.csv.gz",
-        env!("CARGO_MANIFEST_DIR")
-    ));
-    let geo_path = PathBuf::from(format!(
-        "{}/data/2023-7-area-geo.csv.gz",
-        env!("CARGO_MANIFEST_DIR")
-    ));
-    let data = area_lib::CsvAreaData::new(
-        area_lib::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
-        Some(area_lib::CsvAreaGeoData::from_inner_path(geo_path, true).unwrap()),
-    );
+    let data = area_lib::inner_csv_area_data().unwrap();
     test_branch(&area_lib::AreaDao::new(data).unwrap());
 }
 

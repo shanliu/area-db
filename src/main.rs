@@ -1,5 +1,5 @@
 use clap::{App, Arg};
-use std::{path::PathBuf, process::exit};
+use std::process::exit;
 fn main() {
     let mut app = App::new("China Area")
         .about("中国行政区域信息查询,仅用于测试")
@@ -43,18 +43,7 @@ fn main() {
         #[allow(clippy::needless_return)]
         return;
     }
-    let code_path = PathBuf::from(format!(
-        "{}/data/2023-7-area-code.csv.gz",
-        env!("CARGO_MANIFEST_DIR")
-    ));
-    let geo_path = PathBuf::from(format!(
-        "{}/data/2023-7-area-geo.csv.gz",
-        env!("CARGO_MANIFEST_DIR")
-    ));
-    let data = area_lib::CsvAreaData::new(
-        area_lib::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
-        Some(area_lib::CsvAreaGeoData::from_inner_path(geo_path, true).unwrap()),
-    );
+    let data = area_lib::inner_csv_area_data().unwrap();
     let area = area_lib::AreaDao::new(data).unwrap_or_else(|e| output_error(e));
     println!("索引构建完成,开始查询");
     let matches = app.clone().get_matches();
