@@ -155,8 +155,22 @@ impl AreaDataProvider for CsvAreaData {
                 #[cfg(feature = "data-csv-embed-code")]
                 {
                     use std::io::Read;
-                    let zip_data: &[u8] = include_bytes!("../../../data/2023-7-area-code.csv.gz");
-                    let mut gz = flate2::read::GzDecoder::new(zip_data);
+                    use std::str::FromStr;
+                    let csv_path = format!(
+                        "{}/data/2023-7-area-code.csv.gz",
+                        env!("CARGO_MANIFEST_DIR")
+                    );
+                    let csv_buf = PathBuf::from_str(&csv_path).map_err(|e| {
+                        AreaError::System(format!("parse inner csv path fail :{}", e))
+                    })?;
+                    if !csv_buf.exists() {
+                        return Err(AreaError::System(format!(
+                            "not find csv data :{}",
+                            csv_path
+                        )));
+                    }
+                    let zip_data = read_file_to_string(&csv_buf)?;
+                    let mut gz = flate2::read::GzDecoder::new(zip_data.as_bytes());
                     gz.read_to_string(&mut s)
                         .map_err(|e| AreaError::System(e.to_string()))?;
                 }
@@ -208,9 +222,22 @@ impl AreaDataProvider for CsvAreaData {
                         #[cfg(feature = "data-csv-embed-geo")]
                         {
                             use std::io::Read;
-                            let zip_data: &[u8] =
-                                include_bytes!("../../../data/2023-7-area-geo.csv.gz");
-                            let mut gz = flate2::read::GzDecoder::new(zip_data);
+                            use std::str::FromStr;
+                            let csv_path = format!(
+                                "{}/data/2023-7-area-geo.csv.gz",
+                                env!("CARGO_MANIFEST_DIR")
+                            );
+                            let csv_buf = PathBuf::from_str(&csv_path).map_err(|e| {
+                                AreaError::System(format!("parse inner csv path fail :{}", e))
+                            })?;
+                            if !csv_buf.exists() {
+                                return Err(AreaError::System(format!(
+                                    "not find csv data :{}",
+                                    csv_path
+                                )));
+                            }
+                            let zip_data = read_file_to_string(&csv_buf)?;
+                            let mut gz = flate2::read::GzDecoder::new(zip_data.as_bytes());
                             gz.read_to_string(&mut s)
                                 .map_err(|e| AreaError::System(e.to_string()))?;
                         }
