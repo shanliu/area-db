@@ -74,6 +74,7 @@ macro_rules! call_area_dao {
 pub unsafe extern "C" fn area_db_init_csv(
     code_path: *const c_char,
     geo_path: *const c_char,
+    gz: *const c_uchar,
     area_dao: *mut *mut CAreaDao,
     error: *mut *mut c_char,
 ) -> c_int {
@@ -81,22 +82,10 @@ pub unsafe extern "C" fn area_db_init_csv(
     *error = std::ptr::null_mut();
     *area_dao = std::ptr::null_mut();
     let code_file = cstr_to_string!(code_path, error);
-    #[allow(unused_assignments)]
-    let mut code_config = None;
-    if code_file.trim().is_empty() {
-        #[cfg(feature = "data-csv-embed-code")]
-        {
-            code_config = Some(unwrap_or_c_error!(
-                crate::CsvAreaCodeData::from_inner_data(),
-                error
-            ));
-        }
-    } else {
-        code_config = Some(unwrap_or_c_error!(
-            crate::CsvAreaCodeData::from_inner_path(PathBuf::from(code_file)),
-            error
-        ));
-    };
+    let code_config = Some(unwrap_or_c_error!(
+        crate::CsvAreaCodeData::from_inner_path(PathBuf::from(code_file), *gz != 0),
+        error
+    ));
     let code_config = match code_config {
         Some(c) => c,
         None => {
@@ -105,22 +94,10 @@ pub unsafe extern "C" fn area_db_init_csv(
         }
     };
     let geo_file = cstr_to_string!(geo_path, error);
-    #[allow(unused_assignments)]
-    let mut geo_config = None;
-    if geo_file.trim().is_empty() {
-        #[cfg(feature = "data-csv-embed-code")]
-        {
-            geo_config = Some(unwrap_or_c_error!(
-                crate::CsvAreaGeoData::from_inner_data(),
-                error
-            ));
-        }
-    } else {
-        geo_config = Some(unwrap_or_c_error!(
-            crate::CsvAreaGeoData::from_inner_path(PathBuf::from(geo_file)),
-            error
-        ));
-    }
+    let geo_config = Some(unwrap_or_c_error!(
+        crate::CsvAreaGeoData::from_inner_path(PathBuf::from(geo_file), *gz != 0),
+        error
+    ));
     let area_obj = unwrap_or_c_error!(
         AreaDao::new(crate::CsvAreaData::new(code_config, geo_config)),
         error

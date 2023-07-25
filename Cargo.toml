@@ -1,6 +1,6 @@
 [package]
 name = "area-db"
-version = "0.0.14"
+version = "0.0.15"
 authors = ["liushan <shan.liu@msn.com>"]
 edition = "2021"
 build = "src/build.rs"
@@ -38,21 +38,11 @@ crate-type = ["cdylib", "rlib"]
 
 
 [features]
-default = [
-    "data-csv-embed-geo",
-    "data-csv-embed-code",
-    # "data-sqlite-source",
-    #  "data-mysql",
-    "lib-clib",
-]
+default = ["data-csv", "data-sqlite-source", "data-mysql", "lib-clib"]
 #启用C库接口
 lib-clib = []
 #启用CSV数据源
 data-csv = ["csv"]
-#启用CSV的坐标数据到二进制文件中
-data-csv-embed-geo = ["data-csv"]
-#启用城市数据数据到二进制文件中
-data-csv-embed-code = ["data-csv"]
 #启用SQLITE数据源
 data-sqlite = ["rusqlite"]
 #启用SQLITE数据源[内置C源码方式]

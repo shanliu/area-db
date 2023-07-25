@@ -23,3 +23,12 @@ pub(crate) fn read_file_modified_time(path: &PathBuf) -> Option<u64> {
 pub(crate) fn read_file(path: &PathBuf) -> AreaResult<Vec<u8>> {
     std::fs::read(path).map_err(|e| AreaError::System(e.to_string()))
 }
+
+pub(crate) fn de_gz_data(zip_data: Vec<u8>) -> AreaResult<Vec<u8>> {
+    let mut s = vec![];
+    use std::io::Read;
+    let mut gz = flate2::read::GzDecoder::new(&zip_data[..]);
+    gz.read_to_end(&mut s)
+        .map_err(|e| AreaError::System(e.to_string()))?;
+    Ok(s)
+}

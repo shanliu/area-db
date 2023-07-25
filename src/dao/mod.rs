@@ -110,12 +110,21 @@ impl AreaDao {
     }
 }
 
-#[cfg(all(feature = "data-csv-embed-geo", feature = "data-csv-embed-code"))]
+#[cfg(feature = "data-csv")]
 #[test]
 fn test_code() {
+    use std::path::PathBuf;
+    let code_path = PathBuf::from(format!(
+        "{}/data/2023-7-area-code.csv.gz",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    let geo_path = PathBuf::from(format!(
+        "{}/data/2023-7-area-geo.csv.gz",
+        env!("CARGO_MANIFEST_DIR")
+    ));
     let data = crate::CsvAreaData::new(
-        crate::CsvAreaCodeData::from_inner_data().unwrap(),
-        Some(crate::CsvAreaGeoData::from_inner_data().unwrap()),
+        crate::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
+        Some(crate::CsvAreaGeoData::from_inner_path(geo_path, true).unwrap()),
     );
     let area = crate::AreaDao::new(data).unwrap();
     let res = area.code_find("4414").unwrap();

@@ -40,52 +40,34 @@
 ```toml
 #cargo.toml
 #默认的 features 启用 :
-#data-csv-embed-code 省市县镇村 数据
-#data-csv-embed-geo 县级坐标 数据
+#data-csv 
 #lib-clib 输出c的动态库,用于其他语言对接
-area-db = { version = "~0.0.*",git = "https://github.com/shanliu/area-db"}
+area-db = { version = "~0.0.*"}
 ```
 
 > 如果不需要导出c的动态库，可以 使用 `default-features=false` 及不引入 `lib-clib` 来实现 
 
 
-1. 仅使用内置压缩数据来源
-
-> 默认使用当前crate的data目录数据的压缩数据，注意：未嵌入到二进制文件中。
-
-> 数据未嵌入到二进制文件中，所以仅方便测试时使用，实际建议方法2代替。
-
-```toml
-#cargo.toml
-area-db = { version = "~0.0.*", default-features=false,features=["data-csv-embed-code","data-csv-embed-geo"],git = "https://github.com/shanliu/area-db"}
-```
-
-```rust
-let data = area_lib::CsvAreaData::new(
-    area_lib::CsvAreaCodeData::from_inner_data().unwrap(),
-    Some(area_lib::CsvAreaGeoData::from_inner_data().unwrap()),
-);
-let area = area_lib::AreaDao::new(data).unwrap();
-```
-
-2. 使用自定义的csv文件作为数据来源：[城市数据示例](data/2023-7-area-code.csv.gz) [城市坐标示例](data/2023-7-area-geo.csv.gz) 
+1. 默认csv文件作为数据来源：[城市数据示例](data/2023-7-area-code.csv.gz) [城市坐标示例](data/2023-7-area-geo.csv.gz) 
 
 > 仅开启csv文件支持，不引入内置数据源。好处:csv方便更新数据，不嵌入二进制中，二进制文件小
 
 ```toml
 #cargo.toml
-area-db = { version = "~0.0.*", default-features=false,features=["data-csv"],git = "https://github.com/shanliu/area-db"}
+area-db = { version = "~0.0.*", default-features=false,features=["data-csv"]}
 ```
 
 ```rust
+let code_path = PathBuf::from("data/2023-7-area-code.csv.gz");
+let geo_path = PathBuf::from("data/2023-7-area-geo.csv.gz");
 let data = area_lib::CsvAreaData::new(
-    area_lib::CsvAreaCodeData::::from_inner_path(PathBuf::from("data/2023-7-area-code.csv.gz")).unwrap(),
-    Some(area_lib::CsvAreaGeoData::from_inner_path(PathBuf::from("data/2023-7-area-geo.csv.gz")).unwrap()),
+    area_lib::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
+    Some(area_lib::CsvAreaGeoData::from_inner_path(geo_path, true).unwrap()),
 );
 let area = area_lib::AreaDao::new(data).unwrap();
 ```
 
-3. 使用sqlite作为数据来源：[表定义](data/sqlite-table.sql) [内置的包含5级行政区域跟坐标的sqlite数据](data/area-data-sqlite.7z) `解压后使用`
+2. 使用sqlite作为数据来源：[表定义](data/sqlite-table.sql) [内置的包含5级行政区域跟坐标的sqlite数据](data/area-data-sqlite.7z) `解压后使用`
 
 > 如果你已经装了lib-sqlite的库，可用:`data-sqlite` 会使用系统的sqlite库. 具体参见crate:`rusqlite`实现
 
@@ -95,7 +77,7 @@ let area = area_lib::AreaDao::new(data).unwrap();
 
 ```toml
 #cargo.toml
-area-db = { version = "~0.0.*", default-features=false,features=["data-sqlite-source"],git = "https://github.com/shanliu/area-db"}
+area-db = { version = "~0.0.*", default-features=false,features=["data-sqlite-source"]}
 ```
 
 ```rust
@@ -108,13 +90,13 @@ let sqlite = area_lib::SqliteAreaData::new(
 let area = area_lib::AreaDao::new(sqlite).unwrap();
 ```
 
-4. 使用mysql作为数据来源：[表定义](data/mysql-table.sql) 数据可以把以上的csv数据导入进去
+3. 使用mysql作为数据来源：[表定义](data/mysql-table.sql) 数据可以把以上的csv数据导入进去
 
 > 仅开启mysql数据库作为数据源的支持，以下声明不引入内置数据源,方便数据跟现有系统集成
 
 ```toml
 #cargo.toml
-area-db = { version = "~0.0.*", default-features=false,features=["data-mysql"],git = "https://github.com/shanliu/area-db"}
+area-db = { version = "~0.0.*", default-features=false,features=["data-mysql"]}
 ```
 
 ```rust
@@ -128,7 +110,7 @@ let area = area_lib::AreaDao::new(mysql).unwrap();
 
 
 
-5. 数据更新时重新加载数据
+4. 数据更新时重新加载数据
 
 ```rust
 let area = area_lib::AreaDao::new(...).unwrap();

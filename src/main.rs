@@ -1,5 +1,5 @@
 use clap::{App, Arg};
-use std::process::exit;
+use std::{path::PathBuf, process::exit};
 fn main() {
     let mut app = App::new("China Area")
         .about("中国行政区域信息查询,仅用于测试")
@@ -43,38 +43,42 @@ fn main() {
         #[allow(clippy::needless_return)]
         return;
     }
-    #[cfg(all(feature = "data-csv-embed-geo", feature = "data-csv-embed-code"))]
-    {
-        let data = area_lib::CsvAreaData::new(
-            area_lib::CsvAreaCodeData::from_inner_data().unwrap(),
-            Some(area_lib::CsvAreaGeoData::from_inner_data().unwrap()),
-        );
-        let area = area_lib::AreaDao::new(data).unwrap_or_else(|e| output_error(e));
-
-        println!("索引构建完成,开始查询");
-        let matches = app.clone().get_matches();
-        if let Some(code) = matches.value_of("find") {
-            let res = area.code_find(code).unwrap_or_else(|e| output_error(e));
-            println!("{}", format_item(&res));
-        } else if let Some(child) = matches.value_of("child") {
-            let res = area.code_childs(child).unwrap_or_else(|e| output_error(e));
-            println!("{}", format_item(&res));
-        } else if let Some(search) = matches.value_of("search") {
-            let res = area
-                .code_search(search, 10)
-                .unwrap_or_else(|e| output_error(e));
-            for (i, t) in res.iter().enumerate() {
-                println!("{}:{}", i + 1, format_item(&t.item));
-            }
-        } else if let Some(geo) = matches.value_of("geo") {
-            let coords: Vec<&str> = geo.split(',').collect();
-            let lat: f64 = coords[0].parse().expect("lat not a float");
-            let lng: f64 = coords[1].parse().expect("lng not a float");
-            let res = area
-                .geo_search(lat, lng)
-                .unwrap_or_else(|e| output_error(e));
-            println!("{}", format_item(&res));
+    let code_path = PathBuf::from(format!(
+        "{}/data/2023-7-area-code.csv.gz",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    let geo_path = PathBuf::from(format!(
+        "{}/data/2023-7-area-geo.csv.gz",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    let data = area_lib::CsvAreaData::new(
+        area_lib::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
+        Some(area_lib::CsvAreaGeoData::from_inner_path(geo_path, true).unwrap()),
+    );
+    let area = area_lib::AreaDao::new(data).unwrap_or_else(|e| output_error(e));
+    println!("索引构建完成,开始查询");
+    let matches = app.clone().get_matches();
+    if let Some(code) = matches.value_of("find") {
+        let res = area.code_find(code).unwrap_or_else(|e| output_error(e));
+        println!("{}", format_item(&res));
+    } else if let Some(child) = matches.value_of("child") {
+        let res = area.code_childs(child).unwrap_or_else(|e| output_error(e));
+        println!("{}", format_item(&res));
+    } else if let Some(search) = matches.value_of("search") {
+        let res = area
+            .code_search(search, 10)
+            .unwrap_or_else(|e| output_error(e));
+        for (i, t) in res.iter().enumerate() {
+            println!("{}:{}", i + 1, format_item(&t.item));
         }
+    } else if let Some(geo) = matches.value_of("geo") {
+        let coords: Vec<&str> = geo.split(',').collect();
+        let lat: f64 = coords[0].parse().expect("lat not a float");
+        let lng: f64 = coords[1].parse().expect("lng not a float");
+        let res = area
+            .geo_search(lat, lng)
+            .unwrap_or_else(|e| output_error(e));
+        println!("{}", format_item(&res));
     }
 }
 #[allow(dead_code)]

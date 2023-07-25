@@ -5,14 +5,15 @@ use parking_lot::Mutex;
 
 use crate::{AreaCodeData, AreaDataProvider, AreaError, AreaGeoData, AreaGeoDataItem, AreaResult};
 
-use super::utils::{read_file, read_file_modified_time};
+use super::utils::{de_gz_data, read_file, read_file_modified_time};
 impl From<std::io::Error> for AreaError {
     fn from(err: std::io::Error) -> Self {
         AreaError::DB(err.to_string())
     }
 }
 pub struct CsvAreaCodeData {
-    csv_data: Option<PathBuf>,
+    csv_data: PathBuf,
+    gz: bool,
     skip: usize,              //跳过头部n行
     column_name: u8,          //城市完整名字段，从0开始
     column_code: u8,          //城市编码字段，从0开始
@@ -30,7 +31,8 @@ impl CsvAreaCodeData {
         column_key_word: Vec<u8>,
     ) -> Self {
         Self {
-            csv_data: Some(csv_data),
+            csv_data,
+            gz: false,
             skip,
             column_name,
             column_code,
@@ -38,9 +40,10 @@ impl CsvAreaCodeData {
             column_key_word,
         }
     }
-    fn create_inner_data(csv_data: Option<PathBuf>) -> Self {
+    fn create_inner_data(csv_data: PathBuf, gz: bool) -> Self {
         Self {
             csv_data,
+            gz,
             skip: 1,
             column_code: 0,
             column_name: 1,
@@ -48,18 +51,17 @@ impl CsvAreaCodeData {
             column_key_word: vec![2, 3],
         }
     }
-    pub fn from_inner_path(csv_data: PathBuf) -> AreaResult<Self> {
+    /// csv_data csv文件路径
+    /// gz 是否压缩文件
+    pub fn from_inner_path(csv_data: PathBuf, gz: bool) -> AreaResult<Self> {
         std::fs::metadata(&csv_data)?;
-        Ok(Self::create_inner_data(Some(csv_data)))
-    }
-    #[cfg(feature = "data-csv-embed-code")]
-    pub fn from_inner_data() -> AreaResult<Self> {
-        Ok(Self::create_inner_data(None))
+        Ok(Self::create_inner_data(csv_data, gz))
     }
 }
 
 pub struct CsvAreaGeoData {
-    csv_data: Option<PathBuf>,
+    csv_data: PathBuf,
+    gz: bool,
     skip: usize,          //跳过头部几行
     column_code: u8,      //城市编码字段，从0开始
     column_center: u8,    //城市中心坐标字段，不存在时从范围中取中心，从0开始
@@ -77,7 +79,8 @@ impl CsvAreaGeoData {
         code_len: Vec<usize>,
     ) -> Self {
         Self {
-            csv_data: Some(csv_data),
+            gz: false,
+            csv_data,
             skip,
             column_code,
             column_center,
@@ -85,9 +88,10 @@ impl CsvAreaGeoData {
             code_len,
         }
     }
-    fn create_inner_data(csv_data: Option<PathBuf>) -> Self {
+    fn create_inner_data(csv_data: PathBuf, gz: bool) -> Self {
         Self {
             csv_data,
+            gz,
             skip: 1,
             column_code: 0,
             column_center: 1,
@@ -95,13 +99,11 @@ impl CsvAreaGeoData {
             code_len: vec![1, 6],
         }
     }
-    #[cfg(feature = "data-csv-embed-geo")]
-    pub fn from_inner_data() -> AreaResult<Self> {
-        Ok(Self::create_inner_data(None))
-    }
-    pub fn from_inner_path(csv_data: PathBuf) -> AreaResult<Self> {
+    /// csv_data csv文件路径
+    /// gz 是否压缩文件
+    pub fn from_inner_path(csv_data: PathBuf, gz: bool) -> AreaResult<Self> {
         std::fs::metadata(&csv_data)?;
-        Ok(Self::create_inner_data(Some(csv_data)))
+        Ok(Self::create_inner_data(csv_data, gz))
     }
 }
 
@@ -144,39 +146,12 @@ impl CsvAreaData {
 }
 impl AreaDataProvider for CsvAreaData {
     fn read_code_data(&self) -> AreaResult<Vec<AreaCodeData>> {
-        let csv_data = match &self.code_config.csv_data {
-            Some(path) => {
-                let u = read_file_modified_time(path);
-                *self.code_file_time.lock() = u;
-                read_file(path)?
-            }
-            None => {
-                let mut s = vec![];
-                #[cfg(feature = "data-csv-embed-code")]
-                {
-                    use std::io::Read;
-                    use std::str::FromStr;
-                    let csv_path = format!(
-                        "{}/data/2023-7-area-code.csv.gz",
-                        env!("CARGO_MANIFEST_DIR")
-                    );
-                    let csv_buf = PathBuf::from_str(&csv_path).map_err(|e| {
-                        AreaError::System(format!("parse inner csv path fail :{}", e))
-                    })?;
-                    if !csv_buf.exists() {
-                        return Err(AreaError::System(format!(
-                            "not find csv data :{}",
-                            csv_path
-                        )));
-                    }
-                    let zip_data = read_file(&csv_buf)?;
-                    let mut gz = flate2::read::GzDecoder::new(&zip_data[..]);
-                    gz.read_to_end(&mut s)
-                        .map_err(|e| AreaError::System(e.to_string()))?;
-                }
-                s
-            }
-        };
+        let mut csv_data = read_file(&self.code_config.csv_data)?;
+        if self.code_config.gz {
+            csv_data = de_gz_data(csv_data)?;
+        }
+        let u = read_file_modified_time(&self.code_config.csv_data);
+        *self.code_file_time.lock() = u;
         self.read_data(&csv_data, self.code_config.skip, |row| {
             if let Some(code) = row.get(self.code_config.column_code as usize) {
                 if code.is_empty() {
@@ -211,39 +186,12 @@ impl AreaDataProvider for CsvAreaData {
     fn read_geo_data(&self) -> AreaResult<Vec<AreaGeoData>> {
         match &self.geo_config {
             Some(geo_config) => {
-                let csv_data = match &geo_config.csv_data {
-                    Some(path) => {
-                        let u = read_file_modified_time(path);
-                        *self.geo_file_time.lock() = u;
-                        read_file(path)?
-                    }
-                    None => {
-                        let mut s = Vec::new();
-                        #[cfg(feature = "data-csv-embed-geo")]
-                        {
-                            use std::io::Read;
-                            use std::str::FromStr;
-                            let csv_path = format!(
-                                "{}/data/2023-7-area-geo.csv.gz",
-                                env!("CARGO_MANIFEST_DIR")
-                            );
-                            let csv_buf = PathBuf::from_str(&csv_path).map_err(|e| {
-                                AreaError::System(format!("parse inner csv path fail :{}", e))
-                            })?;
-                            if !csv_buf.exists() {
-                                return Err(AreaError::System(format!(
-                                    "not find csv data :{}",
-                                    csv_path
-                                )));
-                            }
-                            let zip_data: Vec<u8> = read_file(&csv_buf)?;
-                            let mut gz = flate2::read::GzDecoder::new(&zip_data[..]);
-                            gz.read_to_end(&mut s)
-                                .map_err(|e| AreaError::System(e.to_string()))?;
-                        }
-                        s
-                    }
-                };
+                let mut csv_data = read_file(&geo_config.csv_data)?;
+                if geo_config.gz {
+                    csv_data = de_gz_data(csv_data)?;
+                }
+                let u = read_file_modified_time(&geo_config.csv_data);
+                *self.geo_file_time.lock() = u;
                 let out = self.read_data(&csv_data, geo_config.skip, |row| {
                     if let Some(code) = row.get(geo_config.column_code as usize) {
                         if !geo_config.code_len.contains(&code.len()) {
@@ -270,22 +218,18 @@ impl AreaDataProvider for CsvAreaData {
         }
     }
     fn code_data_is_change(&self) -> bool {
-        if let Some(path) = &self.code_config.csv_data {
-            if let Some(lt) = read_file_modified_time(path) {
-                if let Some(st) = *self.code_file_time.lock() {
-                    return lt > st;
-                }
+        if let Some(lt) = read_file_modified_time(&self.code_config.csv_data) {
+            if let Some(st) = *self.code_file_time.lock() {
+                return lt > st;
             }
         }
         false
     }
     fn geo_data_is_change(&self) -> bool {
         if let Some(geo_config) = &self.geo_config {
-            if let Some(path) = &geo_config.csv_data {
-                if let Some(lt) = read_file_modified_time(path) {
-                    if let Some(st) = *self.code_file_time.lock() {
-                        return lt > st;
-                    }
+            if let Some(lt) = read_file_modified_time(&geo_config.csv_data) {
+                if let Some(st) = *self.code_file_time.lock() {
+                    return lt > st;
                 }
             }
         }

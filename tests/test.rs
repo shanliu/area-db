@@ -13,7 +13,7 @@ fn test_mysql() {
     area.code_reload().unwrap();
     test_branch(&area);
 }
-
+*/
 #[cfg(any(feature = "data-sqlite", feature = "data-sqlite-source"))]
 #[test]
 fn test_sqlite() {
@@ -34,26 +34,21 @@ fn test_sqlite() {
 #[test]
 fn test_csv() {
     use std::path::PathBuf;
+    let code_path = PathBuf::from(format!(
+        "{}/data/2023-7-area-code.csv.gz",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    let geo_path = PathBuf::from(format!(
+        "{}/data/2023-7-area-geo.csv.gz",
+        env!("CARGO_MANIFEST_DIR")
+    ));
     let data = area_lib::CsvAreaData::new(
-        area_lib::CsvAreaCodeData::from_inner_path(PathBuf::from("data/2023-7-area-code.csv"))
-            .unwrap(),
-        Some(
-            area_lib::CsvAreaGeoData::from_inner_path(PathBuf::from("data/2023-7-area-geo.csv"))
-                .unwrap(),
-        ),
+        area_lib::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
+        Some(area_lib::CsvAreaGeoData::from_inner_path(geo_path, true).unwrap()),
     );
     test_branch(&area_lib::AreaDao::new(data).unwrap());
 }
-*/
-#[cfg(all(feature = "data-csv-embed-geo", feature = "data-csv-embed-code"))]
-#[test]
-fn test_inner() {
-    let data = area_lib::CsvAreaData::new(
-        area_lib::CsvAreaCodeData::from_inner_data().unwrap(),
-        Some(area_lib::CsvAreaGeoData::from_inner_data().unwrap()),
-    );
-    test_branch(&area_lib::AreaDao::new(data).unwrap());
-}
+
 #[allow(dead_code)]
 fn test_branch(area: &area_lib::AreaDao) {
     for _ in 0..10 {
