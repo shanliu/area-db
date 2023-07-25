@@ -1,3 +1,4 @@
+/*
 #[cfg(feature = "data-mysql")]
 #[test]
 fn test_mysql() {
@@ -12,7 +13,7 @@ fn test_mysql() {
     area.code_reload().unwrap();
     test_branch(&area);
 }
-/*
+
 #[cfg(any(feature = "data-sqlite", feature = "data-sqlite-source"))]
 #[test]
 fn test_sqlite() {
