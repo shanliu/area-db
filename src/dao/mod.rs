@@ -113,7 +113,7 @@ impl AreaDao {
 #[cfg(feature = "data-csv")]
 #[test]
 fn test_code() {
-    let data = crate::inner_csv_area_data().unwrap();
+    let data = crate::inner_csv_area_data(true).unwrap();
     let area = crate::AreaDao::new(data).unwrap();
     let res = area.code_find("4414").unwrap();
     assert_eq!(res[1].code, "4414");

@@ -33,7 +33,7 @@ fn test_sqlite() {
 #[cfg(feature = "data-csv")]
 #[test]
 fn test_csv() {
-    let data = area_lib::inner_csv_area_data().unwrap();
+    let data = area_lib::inner_csv_area_data(true).unwrap();
     test_branch(&area_lib::AreaDao::new(data).unwrap());
 }
 

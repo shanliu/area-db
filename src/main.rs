@@ -43,7 +43,7 @@ fn main() {
         #[allow(clippy::needless_return)]
         return;
     }
-    let data = area_lib::inner_csv_area_data().unwrap();
+    let data = area_lib::inner_csv_area_data(true).unwrap();
     let area = area_lib::AreaDao::new(data).unwrap_or_else(|e| output_error(e));
     println!("索引构建完成,开始查询");
     let matches = app.clone().get_matches();
