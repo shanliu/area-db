@@ -1,13 +1,13 @@
 [package]
 name = "area-db"
-version = "0.0.11"
+version = "0.0.12"
 authors = ["liushan <shan.liu@msn.com>"]
 edition = "2021"
 build = "src/build.rs"
 license-file = "LICENSE"
-description="行政区域数据库"
-keywords = ["行政区域", "5级行政区域","中国省市区","经纬度转地址","坐标转地址"]
-categories = ["web-programming","geospatial"]
+description = "行政区域数据库"
+keywords = ["行政区域", "5级行政区域", "中国省市区", "经纬度转地址", "坐标转地址"]
+categories = ["web-programming", "geospatial"]
 repository = "https://github.com/shanliu/area-db"
 
 [[bin]]
@@ -15,55 +15,47 @@ name = "china-area"
 path = "src/main.rs"
 
 [dependencies]
-geo="0.25.0"
+geo = "0.25.0"
 rayon = "1.5.1"
-num_cpus="*"
-flate2="*"
-rusqlite ={version="0.29.0",optional = true}
-csv = {version="1.2.2",optional = true}
-mysql = {version="24.0.0",optional = true}
-log = "0.4.17" 
-clap="3.2.25"
+num_cpus = "*"
+flate2 = "*"
+rusqlite = { version = "0.29.0", optional = true }
+csv = { version = "1.2.2", optional = true }
+mysql = { version = "24.0.0", optional = true }
+log = "0.4.17"
+clap = "3.2.25"
 parking_lot = "0.12.1"
 
 [build-dependencies]
-cc="*"
-glob="*"
-flate2="*"
+cc = "*"
+glob = "*"
+flate2 = "*"
 cbindgen = "0.24.5"
 
 [lib]
 name = "area_lib"
-crate-type = ["cdylib","rlib"]
+crate-type = ["cdylib", "rlib"]
 
 
 [features]
-default=[
+default = [
     "data-csv-embed-geo",
     "data-csv-embed-code",
     # "data-sqlite-source",
     #  "data-mysql",
-    "lib-clib"
+    "lib-clib",
 ]
 #启用C库接口
-lib-clib=[]
+lib-clib = []
 #启用CSV数据源
-data-csv=[
-    "csv"
-]
+data-csv = ["csv"]
 #启用CSV的坐标数据到二进制文件中
-data-csv-embed-geo=["data-csv"]
+data-csv-embed-geo = ["data-csv"]
 #启用城市数据数据到二进制文件中
-data-csv-embed-code=["data-csv"]
+data-csv-embed-code = ["data-csv"]
 #启用SQLITE数据源
-data-sqlite=[
-    "rusqlite"
-]
+data-sqlite = ["rusqlite"]
 #启用SQLITE数据源[内置C源码方式]
-data-sqlite-source=[
-    "data-sqlite"
-]
+data-sqlite-source = ["data-sqlite"]
 #启用mysql数据源支持
-data-mysql=[
-    "mysql",
-]
+data-mysql = ["mysql"]
