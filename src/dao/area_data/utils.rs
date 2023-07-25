@@ -20,6 +20,6 @@ pub(crate) fn read_file_modified_time(path: &PathBuf) -> Option<u64> {
     }
 }
 #[allow(dead_code)]
-pub(crate) fn read_file_to_string(path: &PathBuf) -> AreaResult<String> {
-    std::fs::read_to_string(path).map_err(|e| AreaError::System(e.to_string()))
+pub(crate) fn read_file(path: &PathBuf) -> AreaResult<Vec<u8>> {
+    std::fs::read(path).map_err(|e| AreaError::System(e.to_string()))
 }

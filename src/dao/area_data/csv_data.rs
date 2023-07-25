@@ -5,7 +5,7 @@ use parking_lot::Mutex;
 
 use crate::{AreaCodeData, AreaDataProvider, AreaError, AreaGeoData, AreaGeoDataItem, AreaResult};
 
-use super::utils::{read_file_modified_time, read_file_to_string};
+use super::utils::{read_file, read_file_modified_time};
 impl From<std::io::Error> for AreaError {
     fn from(err: std::io::Error) -> Self {
         AreaError::DB(err.to_string())
@@ -122,13 +122,13 @@ impl CsvAreaData {
     }
     fn read_data<T>(
         &self,
-        csv_data: &str,
+        csv_data: &[u8],
         skip: usize,
         f: impl Fn(&StringRecord) -> Option<T>,
     ) -> AreaResult<Vec<T>> {
         let mut rdr = ReaderBuilder::new()
             .has_headers(false)
-            .from_reader(csv_data.as_bytes());
+            .from_reader(csv_data);
         let mut out = vec![];
         for (i, result) in rdr.records().enumerate() {
             if i < skip {
@@ -148,10 +148,10 @@ impl AreaDataProvider for CsvAreaData {
             Some(path) => {
                 let u = read_file_modified_time(path);
                 *self.code_file_time.lock() = u;
-                read_file_to_string(path)?
+                read_file(path)?
             }
             None => {
-                let mut s = String::new();
+                let mut s = vec![];
                 #[cfg(feature = "data-csv-embed-code")]
                 {
                     use std::io::Read;
@@ -169,9 +169,9 @@ impl AreaDataProvider for CsvAreaData {
                             csv_path
                         )));
                     }
-                    let zip_data = read_file_to_string(&csv_buf)?;
-                    let mut gz = flate2::read::GzDecoder::new(zip_data.as_bytes());
-                    gz.read_to_string(&mut s)
+                    let zip_data = read_file(&csv_buf)?;
+                    let mut gz = flate2::read::GzDecoder::new(&zip_data[..]);
+                    gz.read_to_end(&mut s)
                         .map_err(|e| AreaError::System(e.to_string()))?;
                 }
                 s
@@ -215,10 +215,10 @@ impl AreaDataProvider for CsvAreaData {
                     Some(path) => {
                         let u = read_file_modified_time(path);
                         *self.geo_file_time.lock() = u;
-                        read_file_to_string(path)?
+                        read_file(path)?
                     }
                     None => {
-                        let mut s = String::new();
+                        let mut s = Vec::new();
                         #[cfg(feature = "data-csv-embed-geo")]
                         {
                             use std::io::Read;
@@ -236,9 +236,9 @@ impl AreaDataProvider for CsvAreaData {
                                     csv_path
                                 )));
                             }
-                            let zip_data = read_file_to_string(&csv_buf)?;
-                            let mut gz = flate2::read::GzDecoder::new(zip_data.as_bytes());
-                            gz.read_to_string(&mut s)
+                            let zip_data: Vec<u8> = read_file(&csv_buf)?;
+                            let mut gz = flate2::read::GzDecoder::new(&zip_data[..]);
+                            gz.read_to_end(&mut s)
                                 .map_err(|e| AreaError::System(e.to_string()))?;
                         }
                         s
