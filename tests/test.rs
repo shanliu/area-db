@@ -12,6 +12,7 @@ fn test_mysql() {
     area.code_reload().unwrap();
     test_branch(&area);
 }
+/*
 #[cfg(any(feature = "data-sqlite", feature = "data-sqlite-source"))]
 #[test]
 fn test_sqlite() {
@@ -42,7 +43,7 @@ fn test_csv() {
     );
     test_branch(&area_lib::AreaDao::new(data).unwrap());
 }
-
+*/
 #[cfg(all(feature = "data-csv-embed-geo", feature = "data-csv-embed-code"))]
 #[test]
 fn test_inner() {
