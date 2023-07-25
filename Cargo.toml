@@ -1,6 +1,6 @@
 [package]
 name = "area-db"
-version = "0.0.10"
+version = "0.0.11"
 authors = ["liushan <shan.liu@msn.com>"]
 edition = "2021"
 build = "src/build.rs"
@@ -41,8 +41,8 @@ crate-type = ["cdylib","rlib"]
 default=[
     "data-csv-embed-geo",
     "data-csv-embed-code",
-   # "data-sqlite-source",
-  #  "data-mysql",
+    # "data-sqlite-source",
+    # "data-mysql",
     "lib-clib"
 ]
 #启用C库接口

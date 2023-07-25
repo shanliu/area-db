@@ -16,7 +16,7 @@ pub struct AreaCodeItem {
 }
 
 #[derive(Debug)]
-pub struct AreaCodeDetailItem {
+pub struct AreaCodeRelatedItem {
     pub selected: bool,
     pub item: AreaCodeItem,
 }
@@ -254,7 +254,7 @@ impl AreaCode {
         }
         if area_data.is_empty() {
             if !code_data.is_empty() {
-                return Err(AreaError::NonFind(format!(
+                return Err(AreaError::NotFind(format!(
                     "not find code:{} [empty]",
                     code_data[0]
                 )));
@@ -269,7 +269,7 @@ impl AreaCode {
                 out.extend(Self::code_find(&tmp.childs, &code_data[1..])?);
                 Ok(out)
             }
-            None => Err(AreaError::NonFind(format!(
+            None => Err(AreaError::NotFind(format!(
                 "not find code:{}",
                 code_data[0]
             ))),
@@ -352,8 +352,8 @@ impl AreaCode {
             .collect::<Vec<_>>())
     }
 
-    /// 获取行政区域编码同级区域的信息
-    pub fn detail(&self, code: &str) -> AreaResult<Vec<Vec<AreaCodeDetailItem>>> {
+    /// 获取行政区域编码同级区域的相关数据
+    pub fn related(&self, code: &str) -> AreaResult<Vec<Vec<AreaCodeRelatedItem>>> {
         let code_data = Self::code_parse(code);
         if code_data.is_empty() {
             return Ok(vec![]);
@@ -372,7 +372,7 @@ impl AreaCode {
                             } else {
                                 false
                             };
-                            AreaCodeDetailItem { selected, item: e }
+                            AreaCodeRelatedItem { selected, item: e }
                         })
                         .collect::<Vec<_>>(),
                 );
@@ -386,7 +386,7 @@ impl AreaCode {
         if let Some(tmp) = now_list {
             out_list.push(
                 tmp.into_iter()
-                    .map(|e| AreaCodeDetailItem {
+                    .map(|e| AreaCodeRelatedItem {
                         selected: false,
                         item: e,
                     })

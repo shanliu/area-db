@@ -3,12 +3,13 @@
 fn test_mysql() {
     let uri = "mysql://root:000@127.0.0.1:3306/test";
     let mysql = area_lib::MysqlAreaData::new(
-        area_lib::MysqlAreaCodeData::from_conn(uri.to_string()),
-        Some(area_lib::MysqlAreaGeoData::from_conn(uri.to_string())),
+        area_lib::MysqlAreaCodeData::from_uri(uri),
+        Some(area_lib::MysqlAreaGeoData::from_uri(uri)),
     );
     let area = area_lib::AreaDao::new(mysql).unwrap();
     test_branch(&area);
-    let area = area.reload().unwrap();
+    area.geo_reload().unwrap();
+    area.code_reload().unwrap();
     test_branch(&area);
 }
 #[cfg(any(feature = "data-sqlite", feature = "data-sqlite-source"))]
@@ -20,9 +21,10 @@ fn test_sqlite() {
         area_lib::SqliteAreaCodeData::from_path(PathBuf::from(uri)),
         Some(area_lib::SqliteAreaGeoData::from_path(PathBuf::from(uri))),
     );
-    let area = area_lib::AreaDao::new(sqlite).unwrap();
+    let mut area = area_lib::AreaDao::new(sqlite).unwrap();
     test_branch(&area);
-    let area = area.reload().unwrap();
+    area.geo_reload().unwrap();
+    area.code_reload().unwrap();
     test_branch(&area);
 }
 

@@ -24,9 +24,9 @@ pub struct MysqlAreaCodeData {
 }
 
 impl MysqlAreaCodeData {
-    pub fn from_conn(uri: String) -> Self {
+    pub fn from_uri(uri: &str) -> Self {
         Self {
-            uri,
+            uri: uri.to_owned(),
             sql: "select name,code,hide,key_word from area_code".to_string(),
             column_name: "name".to_string(),
             column_code: "code".to_string(),
@@ -46,9 +46,9 @@ pub struct MysqlAreaGeoData {
 }
 
 impl MysqlAreaGeoData {
-    pub fn from_conn(uri: String) -> Self {
+    pub fn from_uri(uri: &str) -> Self {
         Self {
-            uri,
+            uri:uri.to_owned(),
             sql: "select code,center,polygon from area_geo where code in ('0') or code like '______%'".to_string(),
             column_code: "code".to_string(),
             column_center: "center".to_string(),

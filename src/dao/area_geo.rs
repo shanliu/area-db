@@ -158,7 +158,7 @@ impl AreaGeo {
                 false
             })
         {
-            return Err(AreaError::NonFind(format!(
+            return Err(AreaError::NotFind(format!(
                 "not china geo :{},{}",
                 coord.x, coord.y
             )));
@@ -193,7 +193,7 @@ impl AreaGeo {
                 return Ok(max.code);
             }
         }
-        Err(AreaError::NonFind(format!(
+        Err(AreaError::NotFind(format!(
             "not any area :{},{}",
             coord.x, coord.y
         )))

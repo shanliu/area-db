@@ -16,7 +16,7 @@ use std::{
 pub enum AreaError {
     DB(String),
     System(String),
-    NonFind(String),
+    NotFind(String),
 }
 impl Display for AreaError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -53,13 +53,16 @@ impl AreaDao {
             geo: RwLock::new(geo),
         })
     }
-    pub fn reload(&mut self) -> AreaResult<()> {
+    pub fn code_reload(&self) -> AreaResult<()> {
         if self.provider.code_data_is_change() {
             let tmp = self.provider.read_code_data()?;
             let code = AreaCode::new(&tmp);
             drop(tmp);
             *self.code.write() = code;
         }
+        Ok(())
+    }
+    pub fn geo_reload(&self) -> AreaResult<()> {
         if self.provider.geo_data_is_change() {
             let tmp = self.provider.read_geo_data()?;
             let geo = AreaGeo::new(&tmp);
@@ -77,8 +80,8 @@ impl AreaDao {
     pub fn code_find(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {
         self.code.read().find(code)
     }
-    pub fn code_detail(&self, code: &str) -> AreaResult<Vec<Vec<AreaCodeDetailItem>>> {
-        self.code.read().detail(code).map(|e| {
+    pub fn code_related(&self, code: &str) -> AreaResult<Vec<Vec<AreaCodeRelatedItem>>> {
+        self.code.read().related(code).map(|e| {
             e.into_iter()
                 .map(|mut ie| {
                     ie.sort_by(|a, b| a.item.code.cmp(&b.item.code));
@@ -119,7 +122,7 @@ fn test_code() {
     assert_eq!(res[1].code, "4414");
     let res = area.code_childs("").unwrap();
     assert!(res.iter().any(|e| e.code == "44"));
-    let res = area.code_detail("441403131203").unwrap();
+    let res = area.code_related("441403131203").unwrap();
     assert_eq!(res.len(), 5);
     let res = area.code_search("广东 梅州 南口", 10).unwrap();
     assert_eq!(res[0].item[1].code, "4414");

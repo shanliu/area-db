@@ -1,4 +1,4 @@
-use crate::{AreaCodeDetailItem, AreaCodeItem, AreaDao};
+use crate::{AreaCodeItem, AreaCodeRelatedItem, AreaDao, AreaError};
 use std::ffi::{c_char, c_float, c_int, c_uchar, c_uint, CStr, CString};
 
 #[repr(C)]
@@ -44,6 +44,9 @@ macro_rules! call_area_dao {
             Some(dao) => match dao.dao.as_ref() {
                 Some(tdao) => match tdao.$method($($args),*) {
                     Ok(ok) => ok,
+                    Err(AreaError::NotFind(_))=>{
+                        vec![]
+                    }
                     Err(err) => {
                         set_c_error!(err, $err_str);
                         return 3;
@@ -68,7 +71,7 @@ macro_rules! call_area_dao {
 ///
 #[cfg(feature = "data-csv")]
 #[no_mangle]
-pub unsafe extern "C" fn init_area_csv(
+pub unsafe extern "C" fn area_db_init_csv(
     code_path: *const c_char,
     geo_path: *const c_char,
     area_dao: *mut *mut CAreaDao,
@@ -132,7 +135,7 @@ pub unsafe extern "C" fn init_area_csv(
 ///
 #[cfg(feature = "data-sqlite")]
 #[no_mangle]
-pub unsafe extern "C" fn init_area_sqlite(
+pub unsafe extern "C" fn area_db_init_sqlite(
     db_path: *const c_char,
     area_dao: *mut *mut CAreaDao,
     error: *mut *mut c_char,
@@ -156,6 +159,34 @@ pub unsafe extern "C" fn init_area_sqlite(
     init_area(area_dao, area_obj)
 }
 
+/// # Safety
+///
+/// 用于外部C函数调用进行初始化结构
+/// 不要在RUST调用
+///
+#[cfg(feature = "data-mysql")]
+#[no_mangle]
+pub unsafe extern "C" fn area_db_init_mysql(
+    db_uri: *const c_char,
+    area_dao: *mut *mut CAreaDao,
+    error: *mut *mut c_char,
+) -> c_int {
+    *error = std::ptr::null_mut();
+    *area_dao = std::ptr::null_mut();
+    let uri_config = cstr_to_string!(db_uri, error);
+    if uri_config.trim().is_empty() {
+        set_c_error!("mysql uri can't be empty", error);
+        return 1;
+    }
+    let code_config = crate::MysqlAreaCodeData::from_uri(&uri_config);
+    let geo_config = Some(crate::MysqlAreaGeoData::from_uri(&uri_config));
+    let area_obj = unwrap_or_c_error!(
+        AreaDao::new(crate::MysqlAreaData::new(code_config, geo_config)),
+        error
+    );
+    init_area(area_dao, area_obj)
+}
+
 #[allow(dead_code)]
 unsafe fn init_area(area_dao: *mut *mut CAreaDao, area_obj: AreaDao) -> c_int {
     let area_ptr = Box::into_raw(Box::new(area_obj));
@@ -170,7 +201,7 @@ unsafe fn init_area(area_dao: *mut *mut CAreaDao, area_obj: AreaDao) -> c_int {
 /// 不要在RUST调用
 ///
 #[no_mangle]
-pub unsafe extern "C" fn reload_area_dao(
+pub unsafe extern "C" fn area_db_code_reload(
     area_dao: *mut *mut CAreaDao,
     error: *mut *mut c_char,
 ) -> c_int {
@@ -179,11 +210,36 @@ pub unsafe extern "C" fn reload_area_dao(
         return 0;
     }
     let boxed_vec_wrapper = unsafe { Box::from_raw(*area_dao) };
-    let mut boxed_my_struct = unsafe { Box::from_raw(boxed_vec_wrapper.dao) };
-    unwrap_or_c_error!(boxed_my_struct.reload(), error);
+    let boxed_my_struct = unsafe { Box::from_raw(boxed_vec_wrapper.dao) };
+    unwrap_or_c_error!(boxed_my_struct.code_reload(), error);
+    let area_ptr = Box::into_raw(boxed_my_struct);
+
+    let area_box = Box::into_raw(Box::new(CAreaDao { dao: area_ptr }));
     drop(boxed_vec_wrapper);
+    *area_dao = area_box;
+    0
+}
+
+/// # Safety
+///
+/// 用于外部C函数调用进行初始化结构
+/// 不要在RUST调用
+///
+#[no_mangle]
+pub unsafe extern "C" fn area_db_geo_reload(
+    area_dao: *mut *mut CAreaDao,
+    error: *mut *mut c_char,
+) -> c_int {
+    *error = std::ptr::null_mut();
+    if area_dao.is_null() {
+        return 0;
+    }
+    let boxed_vec_wrapper = unsafe { Box::from_raw(*area_dao) };
+    let boxed_my_struct = unsafe { Box::from_raw(boxed_vec_wrapper.dao) };
+    unwrap_or_c_error!(boxed_my_struct.geo_reload(), error);
     let area_ptr = Box::into_raw(boxed_my_struct);
     let area_box = Box::into_raw(Box::new(CAreaDao { dao: area_ptr }));
+    drop(boxed_vec_wrapper);
     *area_dao = area_box;
     0
 }
@@ -194,7 +250,7 @@ pub unsafe extern "C" fn reload_area_dao(
 /// 不要在RUST调用
 ///
 #[no_mangle]
-pub unsafe extern "C" fn release_area_dao(ptr: *mut CAreaDao) {
+pub unsafe extern "C" fn area_db_release_area_dao(ptr: *mut CAreaDao) {
     if ptr.is_null() {
         return;
     }
@@ -210,7 +266,7 @@ pub unsafe extern "C" fn release_area_dao(ptr: *mut CAreaDao) {
 /// 不要在RUST调用
 ///
 #[no_mangle]
-pub unsafe extern "C" fn release_error(ptr: *mut c_char) {
+pub unsafe extern "C" fn area_db_release_error_str(ptr: *mut c_char) {
     let boxed_vec_wrapper = unsafe { Box::from_raw(ptr) };
     drop(boxed_vec_wrapper);
 }
@@ -235,7 +291,7 @@ pub struct CAreaItemVec {
 /// 不要在RUST调用
 ///
 #[no_mangle]
-pub unsafe extern "C" fn release_area_item_vec(ptr: *mut CAreaItemVec) {
+pub unsafe extern "C" fn area_db_release_item_vec(ptr: *mut CAreaItemVec) {
     let boxed_vec_wrapper = unsafe { Box::from_raw(ptr) };
     for i in 0..boxed_vec_wrapper.len {
         let item = &mut *boxed_vec_wrapper.data.add(i);
@@ -244,8 +300,10 @@ pub unsafe extern "C" fn release_area_item_vec(ptr: *mut CAreaItemVec) {
         drop(name);
         drop(code);
     }
-    let item = &mut *boxed_vec_wrapper.data;
-    drop(Box::from_raw(item));
+    if boxed_vec_wrapper.len > 0 {
+        let item = &mut *boxed_vec_wrapper.data;
+        drop(Box::from_raw(item));
+    }
     drop(boxed_vec_wrapper);
 }
 
@@ -283,7 +341,7 @@ fn area_item_to_ptr(data: Vec<AreaCodeItem>) -> CAreaItemVec {
 /// 不要在RUST调用
 ///
 #[no_mangle]
-pub unsafe extern "C" fn code_childs(
+pub unsafe extern "C" fn area_db_code_childs(
     code_str: *const c_char,
     area_dao: *mut CAreaDao,
     out_data: *mut *mut CAreaItemVec,
@@ -302,7 +360,7 @@ pub unsafe extern "C" fn code_childs(
 /// 不要在RUST调用
 ///
 #[no_mangle]
-pub unsafe extern "C" fn code_find(
+pub unsafe extern "C" fn area_db_code_find(
     code_str: *const c_char,
     area_dao: *mut CAreaDao,
     out_data: *mut *mut CAreaItemVec,
@@ -327,14 +385,26 @@ pub struct CAreaItemVecs {
 /// 不要在RUST调用
 ///
 #[no_mangle]
-pub unsafe extern "C" fn release_area_item_vecs(ptr: *mut CAreaItemVecs) {
+pub unsafe extern "C" fn area_db_release_item_vecs(ptr: *mut CAreaItemVecs) {
     let boxed_vec_wrapper = unsafe { Box::from_raw(ptr) };
     for i in 0..boxed_vec_wrapper.len {
         let item = &mut *boxed_vec_wrapper.data.add(i);
-        release_area_item_vec(item)
+        for j in 0..item.len {
+            let sitem = &mut *item.data.add(j);
+            let name = CString::from_raw(sitem.name as *mut c_char);
+            let code = CString::from_raw(sitem.code as *mut c_char);
+            drop(name);
+            drop(code);
+        }
+        if item.len > 0 {
+            let vitem = &mut *item.data;
+            drop(Box::from_raw(vitem));
+        }
     }
-    let item = &mut *boxed_vec_wrapper.data;
-    drop(Box::from_raw(item));
+    if boxed_vec_wrapper.len > 0 {
+        let item = &mut *boxed_vec_wrapper.data;
+        drop(Box::from_raw(item));
+    }
     drop(boxed_vec_wrapper);
 }
 
@@ -361,7 +431,7 @@ fn area_item_vec_to_ptr(data: Vec<Vec<AreaCodeItem>>) -> CAreaItemVecs {
 /// 不要在RUST调用
 ///
 #[no_mangle]
-pub unsafe extern "C" fn code_search(
+pub unsafe extern "C" fn area_db_code_search(
     code_str: *const c_char,
     limit: c_uint,
     area_dao: *mut CAreaDao,
@@ -378,7 +448,7 @@ pub unsafe extern "C" fn code_search(
 }
 
 #[repr(C)]
-pub struct CAreaDetailItem {
+pub struct CAreaRelatedItem {
     pub name: *const c_char,
     pub code: *const c_char,
     pub selected: c_uchar,
@@ -386,47 +456,49 @@ pub struct CAreaDetailItem {
 }
 
 #[repr(C)]
-pub struct CAreaDetailItemVec {
-    pub data: *mut CAreaDetailItem,
+pub struct CAreaRelatedItemVec {
+    pub data: *mut CAreaRelatedItem,
     pub len: usize,
     pub capacity: usize,
 }
 
 #[repr(C)]
-pub struct CAreaDetailItemVecs {
-    pub data: *mut CAreaDetailItemVec,
+pub struct CAreaRelatedItemVecs {
+    pub data: *mut CAreaRelatedItemVec,
     pub len: usize,
     pub capacity: usize,
 }
 /// # Safety
 ///
-/// 释放 CAreaDetailItemVecs 内存
+/// 释放 CAreaRelatedItemVecs 内存
 /// 不要在RUST调用
 ///
 #[no_mangle]
-pub unsafe extern "C" fn release_area_detail_vecs(ptr: *mut CAreaDetailItemVecs) {
+pub unsafe extern "C" fn area_db_release_related_vecs(ptr: *mut CAreaRelatedItemVecs) {
     let boxed_vec_wrapper = unsafe { Box::from_raw(ptr) };
     for i in 0..boxed_vec_wrapper.len {
         let item = &mut *boxed_vec_wrapper.data.add(i);
-        let boxed_vec_wrapper = unsafe { Box::from_raw(item) };
-        for i in 0..boxed_vec_wrapper.len {
-            let item = &mut *boxed_vec_wrapper.data.add(i);
-            let name = CString::from_raw(item.name as *mut c_char);
-            let code = CString::from_raw(item.code as *mut c_char);
+        for j in 0..item.len {
+            let vitem = &mut *item.data.add(j);
+            let name = CString::from_raw(vitem.name as *mut c_char);
+            let code = CString::from_raw(vitem.code as *mut c_char);
             drop(name);
             drop(code);
         }
+        if item.len > 0 {
+            let item = &mut *item.data;
+            drop(Box::from_raw(item));
+        }
+    }
+    if boxed_vec_wrapper.len > 0 {
         let item = &mut *boxed_vec_wrapper.data;
         drop(Box::from_raw(item));
-        drop(boxed_vec_wrapper);
     }
-    let item = &mut *boxed_vec_wrapper.data;
-    drop(Box::from_raw(item));
     drop(boxed_vec_wrapper);
 }
 
 //转换RUST的AreaCodeItem 为C的结构
-fn area_detail_item_to_ptr(data: Vec<AreaCodeDetailItem>) -> CAreaDetailItemVec {
+fn area_related_item_to_ptr(data: Vec<AreaCodeRelatedItem>) -> CAreaRelatedItemVec {
     let mut c_data = vec![];
     for tmp in data {
         let name = CString::new(tmp.item.name).unwrap_or_default();
@@ -435,7 +507,7 @@ fn area_detail_item_to_ptr(data: Vec<AreaCodeDetailItem>) -> CAreaDetailItemVec 
         let code_ptr = code.as_ptr();
         std::mem::forget(name);
         std::mem::forget(code);
-        c_data.push(CAreaDetailItem {
+        c_data.push(CAreaRelatedItem {
             name: name_ptr,
             code: code_ptr,
             selected: if tmp.selected { 1 } else { 0 },
@@ -447,7 +519,7 @@ fn area_detail_item_to_ptr(data: Vec<AreaCodeDetailItem>) -> CAreaDetailItemVec 
     let capacity = c_data.capacity();
     std::mem::forget(c_data);
     // create a VecWrapper instance
-    CAreaDetailItemVec {
+    CAreaRelatedItemVec {
         data: data_ptr,
         len,
         capacity,
@@ -455,16 +527,16 @@ fn area_detail_item_to_ptr(data: Vec<AreaCodeDetailItem>) -> CAreaDetailItemVec 
 }
 
 //转换RUST的AreaCodeItem数组为 为C的结构
-fn area_detail_item_vec_to_ptr(data: Vec<Vec<AreaCodeDetailItem>>) -> CAreaDetailItemVecs {
+fn area_related_item_vec_to_ptr(data: Vec<Vec<AreaCodeRelatedItem>>) -> CAreaRelatedItemVecs {
     let mut c_data = vec![];
     for tmp in data {
-        c_data.push(area_detail_item_to_ptr(tmp));
+        c_data.push(area_related_item_to_ptr(tmp));
     }
     let data_ptr = c_data.as_mut_ptr();
     let len = c_data.len();
     let capacity = c_data.capacity();
     std::mem::forget(c_data);
-    CAreaDetailItemVecs {
+    CAreaRelatedItemVecs {
         data: data_ptr,
         len,
         capacity,
@@ -477,16 +549,16 @@ fn area_detail_item_vec_to_ptr(data: Vec<Vec<AreaCodeDetailItem>>) -> CAreaDetai
 /// 不要在RUST调用
 ///
 #[no_mangle]
-pub unsafe extern "C" fn code_detail(
+pub unsafe extern "C" fn area_db_code_related(
     code_str: *const c_char,
     area_dao: *mut CAreaDao,
-    out_data: *mut *mut CAreaDetailItemVecs,
+    out_data: *mut *mut CAreaRelatedItemVecs,
     error: *mut *mut c_char,
 ) -> c_int {
     *error = std::ptr::null_mut();
     let rust_string = cstr_to_string!(code_str, error);
-    let data = call_area_dao!(area_dao, error, code_detail, [&rust_string]);
-    *out_data = Box::into_raw(Box::new(area_detail_item_vec_to_ptr(data)));
+    let data = call_area_dao!(area_dao, error, code_related, [&rust_string]);
+    *out_data = Box::into_raw(Box::new(area_related_item_vec_to_ptr(data)));
     0
 }
 
@@ -496,7 +568,7 @@ pub unsafe extern "C" fn code_detail(
 /// 不要在RUST调用
 ///
 #[no_mangle]
-pub unsafe extern "C" fn geo_search(
+pub unsafe extern "C" fn area_db_geo_search(
     lat: c_float,
     lng: c_float,
     area_dao: *mut CAreaDao,

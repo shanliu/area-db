@@ -64,8 +64,8 @@ area-db = { version = "~0.0.*", default-features=false,features=["data-csv-embed
 
 ```rust
 let data = area_lib::CsvAreaData::new(
-    area_lib::CsvAreaCodeData::inner_data().unwrap(),
-    Some(area_lib::CsvAreaGeoData::inner_data().unwrap()),
+    area_lib::CsvAreaCodeData::from_inner_data().unwrap(),
+    Some(area_lib::CsvAreaGeoData::from_inner_data().unwrap()),
 );
 let area = area_lib::AreaDao::new(data).unwrap();
 ```
@@ -81,8 +81,8 @@ area-db = { version = "~0.0.*", default-features=false,features=["data-csv"],git
 
 ```rust
 let data = area_lib::CsvAreaData::new(
-    area_lib::CsvAreaCodeData::path("data/2023-7-area-code.csv.gz").unwrap(),
-    Some(area_lib::CsvAreaGeoData::path("data/2023-7-area-geo.csv.gz").unwrap()),
+    area_lib::CsvAreaCodeData::::from_inner_path(PathBuf::from("data/2023-7-area-code.csv.gz")).unwrap(),
+    Some(area_lib::CsvAreaGeoData::from_inner_path(PathBuf::from("data/2023-7-area-geo.csv.gz")).unwrap()),
 );
 let area = area_lib::AreaDao::new(data).unwrap();
 ```
@@ -102,10 +102,10 @@ area-db = { version = "~0.0.*", default-features=false,features=["data-sqlite-so
 
 ```rust
 let area = area_lib::AreaDao::new(mysql).unwrap();
-let conn = rusqlite::Connection::open("data/area-data.db").unwrap();
+let conn = "data/area-data.db";
 let sqlite = area_lib::SqliteAreaData::new(
-    area_lib::SqliteAreaCodeData::from_conn(&conn),
-    Some(area_lib::SqliteAreaGeoData::from_conn(&conn)),
+    area_lib::SqliteAreaCodeData::from_path(PathBuf::from(&conn)),
+    Some(area_lib::SqliteAreaGeoData::from_path(PathBuf::from(&conn))),
 );
 let area = area_lib::AreaDao::new(sqlite).unwrap();
 ```
@@ -120,13 +120,24 @@ area-db = { version = "~0.0.*", default-features=false,features=["data-mysql"],g
 ```
 
 ```rust
-let pool = mysql::Pool::new("mysql://***:***@127.~0.0.*:3306/***").unwrap();
+let pool = "mysql://***:***@127.~0.0.*:3306/***";
 let mysql = area_lib::MysqlAreaData::new(
-    area_lib::MysqlAreaCodeData::from_conn(pool.clone()),
-    Some(area_lib::MysqlAreaGeoData::from_conn(pool)),
+    area_lib::MysqlAreaCodeData::from_uri(pool),
+    Some(area_lib::MysqlAreaGeoData::from_uri(pool)),
 );
 let area = area_lib::AreaDao::new(mysql).unwrap();
 ```
+
+
+
+5. 数据更新时重新加载数据
+
+```rust
+let area = area_lib::AreaDao::new(...).unwrap();
+area.geo_reload().unwrap();//重新加载GEO数据
+area.code_reload().unwrap();//重新加载CODE数据
+```
+
 
 ##### 可用的查询方法
 
@@ -140,7 +151,15 @@ let res = area.code_childs(child).unwrap();
 println!("{}", &res);
 ```
 
-2. 查询 指定code 的详细地址信息
+2. 查询 指定code 的相关数据
+
+```rust
+let child="441403133";//地址code
+let res = area.code_related(child).unwrap();
+println!("{}", &res);
+```
+
+3. 查询 指定code 的详细地址信息
 
 >  测试查询时间 100us 以内
 
@@ -152,7 +171,7 @@ let res = area.code_find(child).unwrap();
 println!("{}", &res);
 ```
 
-3. 搜索任意地址，返回匹配的地址信息
+4. 搜索任意地址，返回匹配的地址信息
 
 > 测试查询时间 50 ～ 80ms 
 
@@ -163,7 +182,7 @@ let res = area.code_search(child, limit).unwrap();
 println!("{}", &res);
 ```
 
-4. 返回指定坐标的地址信息
+5. 返回指定坐标的地址信息
 
 > 可用手机根据geo信息自动填写当前位置收货地址
 
@@ -176,4 +195,4 @@ let res = area.geo_search(  26.61474,  114.13548 , ).unwrap();
 println!("{}", &res);
 ```
 
-5. 根据当前ip获取地址信息【待定，后面会补上】
+6. 根据当前ip获取地址信息【待定，后面会补上】
