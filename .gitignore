@@ -1,7 +1,7 @@
 /target
 /.vscode
-/c_dome/cmake-build-debug*
-/c_dome/.idea
+/wrappers/c_dome/cmake-build-debug*
+/wrappers/c_dome/.idea
 Cargo.lock
 data/2023-7-area-code.csv
 data/2023-7-area-geo.csv

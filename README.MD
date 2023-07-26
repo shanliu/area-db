@@ -3,7 +3,7 @@
 
 > Rust 实现 省市县镇村 数据查询 名称模糊搜索 及坐标对应城市搜索
 
-> 提供[c的ffi接口](c_dome/main.c)，可以通过ffi转接到其他语言上【预计会弄个php扩展，封装个go包】
+> 提供[c的ffi接口](c_dome/main.c)，可以通过ffi转接到其他语言上【预计会弄个php扩展】
 
 #### 包含以下数据：
 
@@ -60,11 +60,11 @@ area-db = { version = "~0.0.*", default-features=false,features=["data-csv"]}
 ```rust
 let code_path = PathBuf::from("data/2023-7-area-code.csv.gz");
 let geo_path = PathBuf::from("data/2023-7-area-geo.csv.gz");
-let data = area_lib::CsvAreaData::new(
-    area_lib::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
-    Some(area_lib::CsvAreaGeoData::from_inner_path(geo_path, true).unwrap()),
+let data = area_db::CsvAreaData::new(
+    area_db::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
+    Some(area_db::CsvAreaGeoData::from_inner_path(geo_path, true).unwrap()),
 );
-let area = area_lib::AreaDao::new(data).unwrap();
+let area = area_db::AreaDao::new(data).unwrap();
 ```
 
 2. 使用sqlite作为数据来源：[表定义](data/sqlite-table.sql) [内置的包含5级行政区域跟坐标的sqlite数据](data/area-data-sqlite.7z) `解压后使用`
@@ -81,13 +81,13 @@ area-db = { version = "~0.0.*", default-features=false,features=["data-sqlite-so
 ```
 
 ```rust
-let area = area_lib::AreaDao::new(mysql).unwrap();
+let area = area_db::AreaDao::new(mysql).unwrap();
 let conn = "data/area-data.db";
-let sqlite = area_lib::SqliteAreaData::new(
-    area_lib::SqliteAreaCodeData::from_path(PathBuf::from(&conn)),
-    Some(area_lib::SqliteAreaGeoData::from_path(PathBuf::from(&conn))),
+let sqlite = area_db::SqliteAreaData::new(
+    area_db::SqliteAreaCodeData::from_path(PathBuf::from(&conn)),
+    Some(area_db::SqliteAreaGeoData::from_path(PathBuf::from(&conn))),
 );
-let area = area_lib::AreaDao::new(sqlite).unwrap();
+let area = area_db::AreaDao::new(sqlite).unwrap();
 ```
 
 3. 使用mysql作为数据来源：[表定义](data/mysql-table.sql) 数据可以把以上的csv数据导入进去
@@ -101,11 +101,11 @@ area-db = { version = "~0.0.*", default-features=false,features=["data-mysql"]}
 
 ```rust
 let pool = "mysql://***:***@127.~0.0.*:3306/***";
-let mysql = area_lib::MysqlAreaData::new(
-    area_lib::MysqlAreaCodeData::from_uri(pool),
-    Some(area_lib::MysqlAreaGeoData::from_uri(pool)),
+let mysql = area_db::MysqlAreaData::new(
+    area_db::MysqlAreaCodeData::from_uri(pool),
+    Some(area_db::MysqlAreaGeoData::from_uri(pool)),
 );
-let area = area_lib::AreaDao::new(mysql).unwrap();
+let area = area_db::AreaDao::new(mysql).unwrap();
 ```
 
 
@@ -113,7 +113,7 @@ let area = area_lib::AreaDao::new(mysql).unwrap();
 4. 数据更新时重新加载数据
 
 ```rust
-let area = area_lib::AreaDao::new(...).unwrap();
+let area = area_db::AreaDao::new(...).unwrap();
 area.geo_reload().unwrap();//重新加载GEO数据
 area.code_reload().unwrap();//重新加载CODE数据
 ```

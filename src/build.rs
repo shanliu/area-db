@@ -50,7 +50,7 @@ fn build_c_lib() {
         .unwrap()
         .parent()
         .unwrap()
-        .join("area_lib.h");
+        .join("area_db.h");
 
     // Generate the C header file using cbindgen
     cbindgen::generate("")

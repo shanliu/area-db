@@ -43,8 +43,8 @@ fn main() {
         #[allow(clippy::needless_return)]
         return;
     }
-    let data = area_lib::inner_csv_area_data(true).unwrap();
-    let area = area_lib::AreaDao::new(data).unwrap_or_else(|e| output_error(e));
+    let data = area_db::inner_csv_area_data(true).unwrap();
+    let area = area_db::AreaDao::new(data).unwrap_or_else(|e| output_error(e));
     println!("索引构建完成,开始查询");
     let matches = app.clone().get_matches();
     if let Some(code) = matches.value_of("find") {
@@ -77,7 +77,7 @@ fn output_error(e: impl std::error::Error) -> ! {
     exit(0)
 }
 #[allow(dead_code)]
-fn format_item(item: &[area_lib::AreaCodeItem]) -> String {
+fn format_item(item: &[area_db::AreaCodeItem]) -> String {
     let mut strout = "".to_string();
     let mut code = "".to_string();
     for (i, tmp) in item.iter().enumerate() {

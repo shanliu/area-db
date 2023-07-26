@@ -3,11 +3,11 @@
 #[test]
 fn test_mysql() {
     let uri = "mysql://root:000@127.0.0.1:3306/test";
-    let mysql = area_lib::MysqlAreaData::new(
-        area_lib::MysqlAreaCodeData::from_uri(uri),
-        Some(area_lib::MysqlAreaGeoData::from_uri(uri)),
+    let mysql = area_db::MysqlAreaData::new(
+        area_db::MysqlAreaCodeData::from_uri(uri),
+        Some(area_db::MysqlAreaGeoData::from_uri(uri)),
     );
-    let area = area_lib::AreaDao::new(mysql).unwrap();
+    let area = area_db::AreaDao::new(mysql).unwrap();
     test_branch(&area);
     area.geo_reload().unwrap();
     area.code_reload().unwrap();
@@ -19,11 +19,11 @@ fn test_mysql() {
 fn test_sqlite() {
     use std::path::PathBuf;
     let uri = "data/area-data.db";
-    let sqlite = area_lib::SqliteAreaData::new(
-        area_lib::SqliteAreaCodeData::from_path(PathBuf::from(uri)),
-        Some(area_lib::SqliteAreaGeoData::from_path(PathBuf::from(uri))),
+    let sqlite = area_db::SqliteAreaData::new(
+        area_db::SqliteAreaCodeData::from_path(PathBuf::from(uri)),
+        Some(area_db::SqliteAreaGeoData::from_path(PathBuf::from(uri))),
     );
-    let area = area_lib::AreaDao::new(sqlite).unwrap();
+    let area = area_db::AreaDao::new(sqlite).unwrap();
     test_branch(&area);
     area.geo_reload().unwrap();
     area.code_reload().unwrap();
@@ -33,12 +33,12 @@ fn test_sqlite() {
 #[cfg(feature = "data-csv")]
 #[test]
 fn test_csv() {
-    let data = area_lib::inner_csv_area_data(true).unwrap();
-    test_branch(&area_lib::AreaDao::new(data).unwrap());
+    let data = area_db::inner_csv_area_data(true).unwrap();
+    test_branch(&area_db::AreaDao::new(data).unwrap());
 }
 
 #[allow(dead_code)]
-fn test_branch(area: &area_lib::AreaDao) {
+fn test_branch(area: &area_db::AreaDao) {
     for _ in 0..10 {
         let start = std::time::Instant::now();
         area.code_childs("441403").unwrap();

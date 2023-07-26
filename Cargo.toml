@@ -33,15 +33,15 @@ flate2 = "*"
 cbindgen = "0.24.5"
 
 [lib]
-name = "area_lib"
+name = "area_db"
 crate-type = ["cdylib", "rlib"]
 
 
 [features]
 default = [
     "data-csv",
-    # "data-sqlite-source", 
-    # "data-mysql", 
+    #"data-sqlite-source",
+    #"data-mysql",
     "lib-clib",
 ]
 #启用C库接口

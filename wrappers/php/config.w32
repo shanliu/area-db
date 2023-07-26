@@ -1,0 +1,25 @@
+ARG_ENABLE('area_db', 'area_db support', 'no');
+ARG_ENABLE('area_db_use_sqlite', 'area_db sqlite data source support, You need to enable data-sqlite in cargo.toml first.', 'no');
+ARG_ENABLE('area_db_use_mysql', 'area_db mysql data source support, You need to enable data-mysql in cargo.toml first.', 'no');
+if (PHP_AREA_DB != 'no') {
+
+    if (
+        CHECK_LIB("area_db.lib", "area_db", "ext\\area_db\\lib")
+        && CHECK_HEADER_ADD_INCLUDE("area_db.h", "CFLAGS", "ext\\area_db\\lib;" + PHP_EXTRA_INCLUDES)
+    ) {
+        ADD_FLAG('LDFLAGS_AREA_DB', "ext\\area_db\\lib\\area_db.lib");
+        AC_DEFINE('HAVE_AREA_DB', 1, 'area_db support enabled');
+
+        if (PHP_AREA_DB_USE_SQLITE != 'no') {
+
+            AC_DEFINE('HAVE_AREA_DB_USE_SQLITE', 1, 'area_db sqlite data source support enabled');
+        }
+        if (PHP_AREA_DB_USE_MYSQL != 'no') {
+            AC_DEFINE('HAVE_AREA_DB_USE_MYSQL', 1, 'area_db mysql data source support enabled');
+        }
+
+        EXTENSION('area_db', 'area_db.c area_db_class.c area_db_exception_class.c', null, '');
+    } else {
+        WARNING("area_db not enabled; lib libraries or headers not found");
+    }
+}

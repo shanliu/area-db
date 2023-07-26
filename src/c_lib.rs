@@ -1,6 +1,7 @@
 use crate::{AreaCodeItem, AreaCodeRelatedItem, AreaDao, AreaError};
 use std::ffi::{c_char, c_float, c_int, c_uchar, c_uint, CStr, CString};
 
+
 #[repr(C)]
 pub struct CAreaDao {
     dao: *mut AreaDao,
@@ -190,10 +191,8 @@ pub unsafe extern "C" fn area_db_code_reload(
     let boxed_my_struct = unsafe { Box::from_raw(boxed_vec_wrapper.dao) };
     unwrap_or_c_error!(boxed_my_struct.code_reload(), error);
     let area_ptr = Box::into_raw(boxed_my_struct);
-
-    let area_box = Box::into_raw(Box::new(CAreaDao { dao: area_ptr }));
+    *area_dao = Box::into_raw(Box::new(CAreaDao { dao: area_ptr }));
     drop(boxed_vec_wrapper);
-    *area_dao = area_box;
     0
 }
 
@@ -228,13 +227,10 @@ pub unsafe extern "C" fn area_db_geo_reload(
 ///
 #[no_mangle]
 pub unsafe extern "C" fn area_db_release_area_dao(ptr: *mut CAreaDao) {
-    if ptr.is_null() {
-        return;
-    }
     let boxed_vec_wrapper = unsafe { Box::from_raw(ptr) };
     let boxed_my_struct = unsafe { Box::from_raw(boxed_vec_wrapper.dao) };
-    drop(boxed_vec_wrapper);
     drop(boxed_my_struct);
+    drop(boxed_vec_wrapper);
 }
 
 /// # Safety
@@ -552,6 +548,7 @@ pub unsafe extern "C" fn area_db_geo_search(
     out_data: *mut *mut CAreaItemVec,
     error: *mut *mut c_char,
 ) -> c_int {
+
     *error = std::ptr::null_mut();
     let data = call_area_dao!(area_dao, error, geo_search, [lat as f64, lng as f64]);
     *out_data = Box::into_raw(Box::new(area_item_to_ptr(data)));
