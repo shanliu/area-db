@@ -9,9 +9,7 @@ cp ./target/release/libarea_db.so ./php_ext/lib/libarea_db.so
 #linux or mac
 cp ./target/release/area_db.dll ./php_ext/lib/area_db.dll
 cp ./target/release/area_db.dll.lib ./php_ext/lib/area_db.lib
-```
 
-phpize && ./configure && make && make install
 ```
 
 
