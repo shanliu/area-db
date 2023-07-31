@@ -4,65 +4,65 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_reload_arginfo, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(area_db_code_childs_arginfo, 0, 0, 1)
-ZEND_ARG_TYPE_INFO(0, code, IS_STRING, 0)
+ZEND_ARG_INFO(0, code)
 ZEND_END_ARG_INFO()
 
 
 ZEND_BEGIN_ARG_INFO_EX(area_db_code_detail_arginfo, 0, 0, 1)
-ZEND_ARG_TYPE_INFO(0, code, IS_STRING, 0)
+ZEND_ARG_INFO(0, code)
 ZEND_END_ARG_INFO()
 
 
 ZEND_BEGIN_ARG_INFO_EX(area_db_code_search_arginfo, 0, 0, 1)
-ZEND_ARG_TYPE_INFO(0, code, IS_STRING, 0)
-ZEND_ARG_TYPE_INFO(0, limit, IS_LONG,1)
+ZEND_ARG_INFO(0, code)
+ZEND_ARG_INFO(0, limit)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(area_geo_search_arginfo, 0, 0, 2)
-ZEND_ARG_TYPE_INFO(0, lat, IS_DOUBLE,1)
-ZEND_ARG_TYPE_INFO(0, lng, IS_DOUBLE,1)
+ZEND_ARG_INFO(0, lat)
+ZEND_ARG_INFO(0, lng)
 ZEND_END_ARG_INFO()
 
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_initCsv, 0,0, 2)
-	ZEND_ARG_TYPE_INFO(0, code_path, IS_STRING, 0)
-	ZEND_ARG_TYPE_INFO(0, geo_path, IS_STRING, 0)
+	ZEND_ARG_INFO(0,code_path)
+	ZEND_ARG_INFO(0, geo_path)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_initSqlite, 0, 0,1)
-	ZEND_ARG_TYPE_INFO(0, sqlite_sql, IS_STRING, 0)
+	ZEND_ARG_INFO(0, sqlite_sql)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_initMysql, 0, 0,1)
-	ZEND_ARG_TYPE_INFO(0, uri, IS_STRING, 0)
+	ZEND_ARG_INFO(0, uri)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_shutdown, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_codeChilds, 0, 0,  1)
-	ZEND_ARG_TYPE_INFO(0, code, IS_STRING, 0)
+	ZEND_ARG_INFO(0, code)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_codeDetail, 0, 0,  1)
-ZEND_ARG_TYPE_INFO(0, code, IS_STRING, 0)
+ZEND_ARG_INFO(0, code)
 ZEND_END_ARG_INFO()
 
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_codeFind, 0, 0,  1)
-ZEND_ARG_TYPE_INFO(0, code, IS_STRING, 0)
+ZEND_ARG_INFO(0, code)
 ZEND_END_ARG_INFO()
 
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_codeSearch, 0, 0,  2)
-	ZEND_ARG_TYPE_INFO(0, code, IS_STRING, 0)
-	ZEND_ARG_TYPE_INFO(0, limit, IS_LONG, 0)
+	ZEND_ARG_INFO(0, code)
+	ZEND_ARG_INFO(0, limit)
 ZEND_END_ARG_INFO()
 
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_geoSearch, 0,0, 2)
-	ZEND_ARG_TYPE_INFO(0, lat, IS_DOUBLE, 0)
-	ZEND_ARG_TYPE_INFO(0, lng, IS_DOUBLE, 0)
+	ZEND_ARG_INFO(0, lat)
+	ZEND_ARG_INFO(0, lng)
 ZEND_END_ARG_INFO()
 
 
@@ -77,7 +77,6 @@ ZEND_METHOD(AreaDb, codeSearch);
 ZEND_METHOD(AreaDb, codeFind);
 ZEND_METHOD(AreaDb, codeRelated);
 ZEND_METHOD(AreaDb, geoSearch);
-
 
 static const zend_function_entry class_AreaDb_methods[] = {
 	ZEND_ME(AreaDb, initCsv, arginfo_class_AreaDb_initCsv, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)

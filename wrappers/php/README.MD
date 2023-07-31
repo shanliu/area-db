@@ -1,5 +1,8 @@
 
 #### 编译前准备动态库
+
+> 兼容PHP>=7.0
+
 ```
 #安装cargo 参考: https://www.rustup.rs
 cd ../ && cargo build -r && ./php_ext

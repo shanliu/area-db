@@ -18,6 +18,8 @@ PHP_ARG_WITH(area_db_use_mysql,
 
 if test "$PHP_AREA_DB" != "no"; then
 
+   PHP_ADD_LIBRARY(pthread)
+
    if test "$PHP_AREA_DB_DIR" = "yes"; then
    		if test -r ./lib/area_db.h;
    		then
@@ -29,7 +31,7 @@ if test "$PHP_AREA_DB" != "no"; then
         then
             PHP_ADD_LIBRARY_WITH_PATH(area_db, ./lib/, AREA_DB_SHARED_LIBADD)
         else
-            AC_MSG_ERROR([zxing path ./lib/ not find libarea_db.so])
+            AC_MSG_ERROR([area_db lib path ./lib/ not find libarea_db.so,please use the libarea_db.so directory with --with-area_db_dir])
         fi
    	else
    		if test -r $PHP_AREA_DB_DIR/area_db.h;
@@ -42,7 +44,7 @@ if test "$PHP_AREA_DB" != "no"; then
         then
             PHP_ADD_LIBRARY_WITH_PATH(area_db, $PHP_AREA_DB_DIR, AREA_DB_SHARED_LIBADD)
         else
-            AC_MSG_ERROR([zxing path $PHP_AREA_DB_DIR not find libarea_db.so])
+            AC_MSG_ERROR([area_db lib path $PHP_AREA_DB_DIR not find libarea_db.so])
         fi
    	fi
    PHP_SUBST(AREA_DB_SHARED_LIBADD)

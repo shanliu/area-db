@@ -4,7 +4,7 @@
 
 #ifndef PHP_AERA_DB_CLASS_H
 #define PHP_AERA_DB_CLASS_H
-#if PHP_VERSION_ID < 70200
+#if PHP_VERSION_ID < 80000
 #include "area_db_arginfo_7.h"
 #else
 #include "area_db_arginfo.h"

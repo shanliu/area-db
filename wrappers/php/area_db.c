@@ -9,11 +9,26 @@
 #include "area_db_class.h"
 
 
+#ifdef PHP_WIN32
+#include <windows.h>
+extern SRWLOCK lock;
+#else
+#include <pthread.h>
+extern pthread_rwlock_t lock;
+#endif
+
+
 
 /* {{{ PHP_MINIT_FUNCTION
  */
 PHP_MINIT_FUNCTION(area_db)
 {
+	#ifdef _WIN32
+        InitializeSRWLock(&lock);
+	#else
+		pthread_rwlock_init(&lock, NULL);
+	#endif
+
 	area_db_class_init();
 	return SUCCESS;
 }
@@ -23,6 +38,12 @@ PHP_MINIT_FUNCTION(area_db)
  */
 PHP_MSHUTDOWN_FUNCTION(area_db)
 {
+#ifdef _WIN32
+
+#else
+	pthread_rwlock_destroy(&lock);
+#endif
+
     return SUCCESS;
 }
 /* }}} */

@@ -4,12 +4,31 @@
 
 #include <stdlib.h>
 #include "zend.h"
-#include "zend_types.h"
 #include "zend_API.h"
 #include "zend_exceptions.h"
 #include "area_db_class.h"
 #include "php_area_db.h"
 #include "area_db_exception_class.h"
+#include "area_db.h"
+
+CAreaDao* area_dao;
+#define GET_CAREA_DAO() area_dao
+
+#ifdef PHP_WIN32
+#include <windows.h>
+extern SRWLOCK lock;
+#define CAREA_R_LOCK()  AcquireSRWLockShared(&lock);
+#define CAREA_R_UNLOCK() ReleaseSRWLockShared(&lock);
+#define CAREA_W_LOCK() AcquireSRWLockExclusive(&lock);
+#define CAREA_W_UNLOCK()  ReleaseSRWLockExclusive(&lock);
+#else
+#include <pthread.h>
+extern pthread_rwlock_t lock;
+#define CAREA_R_LOCK() pthread_rwlock_rdlock(&lock);
+#define CAREA_R_UNLOCK()  pthread_rwlock_unlock(&lock);
+#define CAREA_W_LOCK() pthread_rwlock_wrlock(&lock);
+#define CAREA_W_UNLOCK() pthread_rwlock_unlock(&lock);
+#endif
 
 
 
@@ -61,9 +80,11 @@ ZEND_METHOD(AreaDb, initCsv){
     char *ret_err=NULL;
     int ret_no=0;
     unsigned char sgz=gz==0?0:1;
-    if (AREA_DB_G(area_dao) == NULL) {
-        ret_no=area_db_init_csv(code_file,geo_file,&sgz,&AREA_DB_G(area_dao),&ret_err);
+CAREA_W_LOCK()
+    if (GET_CAREA_DAO() == NULL) {
+        ret_no=area_db_init_csv(code_file,geo_file,&sgz,&GET_CAREA_DAO(),&ret_err);
     }
+CAREA_W_UNLOCK()
     if (ret_no!=0){
         throw_area_exception(ret_no,"init csv data fail:%s",ret_err);
     }
@@ -85,9 +106,11 @@ ZEND_METHOD(AreaDb, initSqlite){
 #if HAVE_AREA_DB_USE_SQLITE
     char *ret_err=NULL;
     int ret_no=0;
-    if (AREA_DB_G(area_dao)  == NULL) {
-        ret_no=area_db_init_sqlite(filename,&AREA_DB_G(area_dao) ,&ret_err);
+    CAREA_W_LOCK()
+    if (GET_CAREA_DAO()  == NULL) {
+        ret_no=area_db_init_sqlite(filename,&GET_CAREA_DAO() ,&ret_err);
     }
+    CAREA_W_UNLOCK()
     if (ret_no!=0){
         throw_area_exception(ret_no,"init sqlite fail:%s",ret_err);
     }
@@ -113,8 +136,8 @@ ZEND_METHOD(AreaDb, initMysql){
 #if HAVE_AREA_DB_USE_MYSQL
     char *ret_err=NULL;
     int ret_no=0;
-    if (AREA_DB_G(area_dao)  == NULL) {
-        ret_no=area_db_init_mysql(uri,&AREA_DB_G(area_dao) ,&ret_err);
+    if (GET_CAREA_DAO()  == NULL) {
+        ret_no=area_db_init_mysql(uri,&GET_CAREA_DAO() ,&ret_err);
     }
     if (ret_no!=0){
         throw_area_exception(ret_no,"init mysql fail:%s",ret_err);
@@ -126,23 +149,22 @@ ZEND_METHOD(AreaDb, initMysql){
 }
 
 ZEND_METHOD(AreaDb, shutdown){
-
-    if (AREA_DB_G(area_dao)  != NULL) {
-        area_db_release_area_dao(AREA_DB_G(area_dao) );
-        AREA_DB_G(area_dao)=NULL;
+CAREA_W_LOCK()
+    if (GET_CAREA_DAO()  != NULL) {
+        area_db_release_area_dao(GET_CAREA_DAO() );
+        GET_CAREA_DAO()=NULL;
     }
-
+CAREA_W_UNLOCK()
 }
 
 
 
 ZEND_METHOD(AreaDb, codeReload){
-    CAreaItemVec* area_vec2=NULL;
     char *ret_err=NULL;
     int ret_no=0;
 
-    if (AREA_DB_G(area_dao)  != NULL) {
-        ret_no=area_db_code_reload(&AREA_DB_G(area_dao) ,&ret_err);
+    if (GET_CAREA_DAO()  != NULL) {
+        ret_no=area_db_code_reload(&GET_CAREA_DAO() ,&ret_err);
     }
 
     if (ret_no!=0){
@@ -150,14 +172,13 @@ ZEND_METHOD(AreaDb, codeReload){
     }
 }
 ZEND_METHOD(AreaDb, geoReload){
-    CAreaItemVec* area_vec2=NULL;
     char *ret_err=NULL;
     int ret_no=0;
-
-    if (AREA_DB_G(area_dao)  != NULL) {
-        ret_no=area_db_geo_reload(&AREA_DB_G(area_dao) ,&ret_err);
+CAREA_W_LOCK()
+    if (GET_CAREA_DAO()  != NULL) {
+        ret_no=area_db_geo_reload(&GET_CAREA_DAO() ,&ret_err);
     }
-
+CAREA_W_UNLOCK()
     if (ret_no!=0){
         throw_area_exception(ret_no,"reload geo fail:%s",ret_err);
     }
@@ -181,11 +202,11 @@ ZEND_METHOD(AreaDb, codeChilds){
     CAreaItemVec* area_vec2=NULL;
     char *ret_err=NULL;
     int ret_no=0;
-
-    if (AREA_DB_G(area_dao)  != NULL) {
-        ret_no=area_db_code_childs(code,AREA_DB_G(area_dao) ,&area_vec2,&ret_err);
+CAREA_R_LOCK()
+    if (GET_CAREA_DAO()  != NULL) {
+        ret_no=area_db_code_childs(code,GET_CAREA_DAO() ,&area_vec2,&ret_err);
     }
-
+CAREA_R_UNLOCK()
     if(ret_no!=0){
         throw_area_exception(ret_no,"child parse fail:%s",ret_err);
     }else {
@@ -209,11 +230,11 @@ ZEND_METHOD(AreaDb, codeFind){
     CAreaItemVec* area_vec2=NULL;
     char *ret_err=NULL;
     int ret_no=0;
-
-    if (AREA_DB_G(area_dao)  != NULL) {
-        ret_no=area_db_code_find(code,AREA_DB_G(area_dao) ,&area_vec2,&ret_err);
+CAREA_R_LOCK()
+    if (GET_CAREA_DAO()  != NULL) {
+        ret_no=area_db_code_find(code,GET_CAREA_DAO() ,&area_vec2,&ret_err);
     }
-
+CAREA_R_UNLOCK()
     if(ret_no!=0){
         throw_area_exception(ret_no,"child find fail:%s",ret_err);
     }else {
@@ -240,11 +261,11 @@ ZEND_METHOD(AreaDb, codeSearch){
     CAreaItemVecs* area_vec1=NULL;
     char *ret_err=NULL;
     int ret_no=0;
-
-    if (AREA_DB_G(area_dao)  != NULL) {
-        ret_no=area_db_code_search(code,limit<=0?10:limit,AREA_DB_G(area_dao) ,&area_vec1,&ret_err);
+CAREA_R_LOCK()
+    if (GET_CAREA_DAO()  != NULL) {
+        ret_no=area_db_code_search(code,limit<=0?10:limit,GET_CAREA_DAO() ,&area_vec1,&ret_err);
     }
-
+CAREA_R_UNLOCK()
     if(ret_no!=0){
         throw_area_exception(ret_no,"search fail:%s",ret_err);
     }else {
@@ -289,11 +310,11 @@ ZEND_METHOD(AreaDb, codeRelated){
     CAreaRelatedItemVecs * area_vec1=NULL;
     char *ret_err=NULL;
     int ret_no=0;
-
-    if (AREA_DB_G(area_dao)  != NULL) {
-        ret_no=area_db_code_related(code,AREA_DB_G(area_dao) ,&area_vec1,&ret_err);
+CAREA_R_LOCK()
+    if (GET_CAREA_DAO()  != NULL) {
+        ret_no=area_db_code_related(code,GET_CAREA_DAO() ,&area_vec1,&ret_err);
     }
-
+CAREA_R_UNLOCK()
     if(ret_no!=0){
         throw_area_exception(ret_no,"related get fail:%s",ret_err);
     }else {
@@ -338,11 +359,11 @@ ZEND_METHOD(AreaDb, geoSearch){
     CAreaItemVec* area_vec1=NULL;
     char *ret_err=NULL;
     int ret_no=0;
-
-    if (AREA_DB_G(area_dao)  != NULL) {
-        ret_no= area_db_geo_search(lat,lng,AREA_DB_G(area_dao) ,&area_vec1,&ret_err);
+CAREA_R_LOCK()
+    if (GET_CAREA_DAO()  != NULL) {
+        ret_no= area_db_geo_search(lat,lng,GET_CAREA_DAO() ,&area_vec1,&ret_err);
     }
-
+CAREA_R_UNLOCK()
     if(ret_no!=0){
         throw_area_exception(ret_no,"geo get fail:%s",ret_err);
     }else {
