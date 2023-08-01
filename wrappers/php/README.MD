@@ -5,7 +5,9 @@
 
 ```
 #安装cargo 参考: https://www.rustup.rs
-cd ../ && cargo build -r && ./php_ext
+cd ../ 
+#修改 cargo.toml 先启用 features=["lib-clib"]
+cargo build -r && ./php_ext
 cp ./target/release/area_db.h ./php_ext/lib/area_db.h
 #windows:
 cp ./target/release/libarea_db.so ./php_ext/lib/libarea_db.so

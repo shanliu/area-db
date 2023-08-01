@@ -16,24 +16,13 @@
 
 ##### 使用示例:
 
-> 引入area-db到cargo.toml,如果不需要导出c的动态库，可以 使用 `default-features=false` 及不引入 `lib-clib` 来实现 
-
-```toml
-#cargo.toml
-#默认的 features 启用 :
-#data-csv 
-#lib-clib 输出c的动态库,用于其他语言对接
-area-db = { version = "~0.0.*"}
-```
-
-
 1. 请先下载CSV数据文件到你的项目：[城市数据示例](data/2023-7-area-code.csv.gz) [城市坐标示例](data/2023-7-area-geo.csv.gz) 
 
 > csv数据源使用示例
 
 ```toml
-#cargo.toml
-area-db = { version = "~0.0.*", default-features=false,features=["data-csv"]}
+#cargo.toml 默认仅引入:data-csv 
+area-db = { version = "~0.0.*"}
 ```
 
 ```rust
@@ -94,6 +83,17 @@ let area = area_db::AreaDao::new(...).unwrap();
 area.geo_reload().unwrap();//重新加载GEO数据
 area.code_reload().unwrap();//重新加载CODE数据
 ```
+
+5. FFI导出
+
+> 默认不引入 `lib-clib` ,需要FFI请开启
+
+```toml
+#cargo.toml
+#lib-clib 输出c的动态库,用于其他语言对接
+area-db = { version = "~0.0.*",features=["lib-clib"]}
+```
+
 
 ##### 可用的查询方法
 
