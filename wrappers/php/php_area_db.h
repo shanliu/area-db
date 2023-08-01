@@ -6,7 +6,7 @@
 extern zend_module_entry area_db_module_entry;
 # define phpext_area_db_ptr &area_db_module_entry
 
-# define PHP_AREA_DB_VERSION "0.0.19"
+# define PHP_AREA_DB_VERSION "0.0.20"
 
 # if defined(ZTS) && defined(COMPILE_DL_AREA_DB)
 ZEND_TSRMLS_CACHE_EXTERN()

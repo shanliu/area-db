@@ -3,7 +3,7 @@
 
 > Rust 实现 省市县镇村 数据查询 名称模糊搜索 及坐标对应城市搜索
 
-> 提供[c的ffi接口](wrappers/c_dome/main.c)，可以通过ffi转接到其他语言上【预计会弄个php扩展】
+> [c的ffi示例](wrappers/c_dome/main.c)，可以通过ffi转接到其他语言上,示例:[php扩展](wrappers/php)
 
 #### 包含以下数据：
 
@@ -14,28 +14,9 @@
 3. 预计下一步引入：ip对应城市数据
 
 
-#### 代码及功能说明：
+##### 使用示例:
 
-> 可用于测试用命令 `cargo build` 会生成 `china-area` 命令
-
-> 每次启动都构建一次内存索引，所以慢，仅测试用.
-
-> 预计:准备做个gui界面，启动后多次查询。
-
-```
-#使用示例及输出
-./target/release/china-area -s "广东 布吉"
-开始构建索引
-索引构建完成,开始查询
-1:[440307014004]广东省-深圳市-龙岗区-布吉街道-德兴
-2:[440307014002]广东省-深圳市-龙岗区-布吉街道-长龙
-3:[440307014005]广东省-深圳市-龙岗区-布吉街道-龙珠
-...省略显示...
-```
-
-##### 数据来源自定义
-
-> 默认 features 功能
+> 引入area-db到cargo.toml,如果不需要导出c的动态库，可以 使用 `default-features=false` 及不引入 `lib-clib` 来实现 
 
 ```toml
 #cargo.toml
@@ -45,12 +26,10 @@
 area-db = { version = "~0.0.*"}
 ```
 
-> 如果不需要导出c的动态库，可以 使用 `default-features=false` 及不引入 `lib-clib` 来实现 
 
+1. 请先下载CSV数据文件到你的项目：[城市数据示例](data/2023-7-area-code.csv.gz) [城市坐标示例](data/2023-7-area-geo.csv.gz) 
 
-1. 默认csv文件作为数据来源：[城市数据示例](data/2023-7-area-code.csv.gz) [城市坐标示例](data/2023-7-area-geo.csv.gz) 
-
-> 仅开启csv文件支持，不引入内置数据源。好处:csv方便更新数据，不嵌入二进制中，二进制文件小
+> csv数据源使用示例
 
 ```toml
 #cargo.toml
@@ -67,13 +46,13 @@ let data = area_db::CsvAreaData::new(
 let area = area_db::AreaDao::new(data).unwrap();
 ```
 
-2. 使用sqlite作为数据来源：[表定义](data/sqlite-table.sql) [内置的包含5级行政区域跟坐标的sqlite数据](data/area-data-sqlite.7z) `解压后使用`
+2. 请先下载sqlite数据到你的项目 [内置的包含5级行政区域跟坐标的sqlite数据](data/area-data-sqlite.7z) `解压后使用` 
 
 > 如果你已经装了lib-sqlite的库，可用:`data-sqlite` 会使用系统的sqlite库. 具体参见crate:`rusqlite`实现
 
 > 如果你未安装lib-sqlite的库，可用:`data-sqlite-source` 会通过c源码编译sqlite库. sqlite源码通过子模块`git submodule update --init`获取
 
-> 仅开启sqlite文件支持，不引入内置数据源，方便更新数据，不嵌入二进制中，二进制文件小
+> sqlite数据源使用示例
 
 ```toml
 #cargo.toml
@@ -92,7 +71,7 @@ let area = area_db::AreaDao::new(sqlite).unwrap();
 
 3. 使用mysql作为数据来源：[表定义](data/mysql-table.sql) 数据可以把以上的csv数据导入进去
 
-> 仅开启mysql数据库作为数据源的支持，以下声明不引入内置数据源,方便数据跟现有系统集成
+> mysql数据库作为数据源的示例
 
 ```toml
 #cargo.toml
@@ -108,8 +87,6 @@ let mysql = area_db::MysqlAreaData::new(
 let area = area_db::AreaDao::new(mysql).unwrap();
 ```
 
-
-
 4. 数据更新时重新加载数据
 
 ```rust
@@ -117,7 +94,6 @@ let area = area_db::AreaDao::new(...).unwrap();
 area.geo_reload().unwrap();//重新加载GEO数据
 area.code_reload().unwrap();//重新加载CODE数据
 ```
-
 
 ##### 可用的查询方法
 

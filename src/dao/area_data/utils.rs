@@ -1,6 +1,6 @@
 use std::{path::PathBuf, time::UNIX_EPOCH};
 
-use crate::{AreaError, AreaResult, CsvAreaData};
+use crate::{AreaError, AreaResult};
 
 #[allow(dead_code)]
 pub(crate) fn read_file_modified_time(path: &PathBuf) -> Option<u64> {
@@ -31,24 +31,4 @@ pub(crate) fn de_gz_data(zip_data: Vec<u8>) -> AreaResult<Vec<u8>> {
     gz.read_to_end(&mut s)
         .map_err(|e| AreaError::System(e.to_string()))?;
     Ok(s)
-}
-
-pub fn inner_csv_area_data(use_geo_data: bool) -> AreaResult<CsvAreaData> {
-    let code_path = PathBuf::from(format!(
-        "{}/data/2023-7-area-code.csv.gz",
-        env!("CARGO_MANIFEST_DIR")
-    ));
-    let geo_data = if use_geo_data {
-        let geo_path = PathBuf::from(format!(
-            "{}/data/2023-7-area-geo.csv.gz",
-            env!("CARGO_MANIFEST_DIR")
-        ));
-        Some(crate::CsvAreaGeoData::from_inner_path(geo_path, true)?)
-    } else {
-        None
-    };
-    Ok(CsvAreaData::new(
-        crate::CsvAreaCodeData::from_inner_path(code_path, true)?,
-        geo_data,
-    ))
 }

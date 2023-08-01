@@ -13,4 +13,3 @@ mod mysql_data;
 pub use mysql_data::*;
 
 mod utils;
-pub use utils::inner_csv_area_data;

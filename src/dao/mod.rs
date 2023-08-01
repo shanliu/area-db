@@ -113,7 +113,21 @@ impl AreaDao {
 #[cfg(feature = "data-csv")]
 #[test]
 fn test_code() {
-    let data = crate::inner_csv_area_data(true).unwrap();
+    let code_path = std::path::PathBuf::from(format!(
+        "{}/data/2023-7-area-code.csv.gz",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    let geo_data = {
+        let geo_path = std::path::PathBuf::from(format!(
+            "{}/data/2023-7-area-geo.csv.gz",
+            env!("CARGO_MANIFEST_DIR")
+        ));
+        Some(crate::CsvAreaGeoData::from_inner_path(geo_path, true).unwrap())
+    };
+    let data = CsvAreaData::new(
+        crate::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
+        geo_data,
+    );
     let area = crate::AreaDao::new(data).unwrap();
     let res = area.code_find("4414").unwrap();
     assert_eq!(res[1].code, "4414");

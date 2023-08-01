@@ -1,18 +1,15 @@
 [package]
 name = "area-db"
-version = "0.0.19"
+version = "0.0.20"
 authors = ["liushan <shan.liu@msn.com>"]
 edition = "2021"
 build = "src/build.rs"
+exclude = ["data/*", "wrappers/*", "sqlite-amalgamation/*"]
 license-file = "LICENSE"
 description = "行政区域数据库"
 keywords = ["行政区域", "5级行政区域", "中国省市区", "经纬度转地址", "坐标转地址"]
 categories = ["web-programming", "geospatial"]
 repository = "https://github.com/shanliu/area-db"
-
-[[bin]]
-name = "china-area"
-path = "src/main.rs"
 
 [dependencies]
 geo = "0.25.0"
@@ -40,8 +37,8 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = [
     "data-csv",
-    #"data-sqlite-source",
-    #"data-mysql",
+    # "data-sqlite-source", 
+    # "data-mysql", 
     "lib-clib",
 ]
 #启用C库接口
