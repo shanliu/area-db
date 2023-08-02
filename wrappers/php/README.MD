@@ -33,7 +33,7 @@ make && make install
 
 #### windows 下编译
 
-> [php 8.1 windows dll](https://github.com/shanliu/area_db/releases)
+> [x64 php 8.* windows dll](https://github.com/shanliu/area-db/releases)
 
 > load build env
 
