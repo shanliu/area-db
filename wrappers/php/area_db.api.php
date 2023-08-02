@@ -2,7 +2,7 @@
 
 //1.配置数据文件路径
 const CODE_DATA_PATH=__DIR__."/../../data/2023-7-area-code.csv.gz";
-const GEO_DATA_PATH=__DIR__."/../../data/2023-7-area-code.csv.gz";
+const GEO_DATA_PATH=__DIR__."/../../data/2023-7-area-geo.csv.gz";
 //2. 测试命令
 //php -S localhost:8000
 //curl 'http://localhost:8000/area_db.api.php?code=4414'

@@ -1,4 +1,4 @@
-// 需要先在 启用 features=["lib-clib"] 后编译
+// 需要先运行 cargo build --features "lib-clib" 后编译
 #include <stdio.h>
 #include "area_db.h"
 void test_code_related(CAreaDao* area_dao){

@@ -5,9 +5,7 @@
 
 ```
 #安装cargo 参考: https://www.rustup.rs
-cd ../ 
-#修改 cargo.toml 先启用 features=["lib-clib"]
-cargo build -r && ./php_ext
+cd ../ && cargo build --features "lib-clib" -r && ./php_ext 
 cp ./target/release/area_db.h ./php_ext/lib/area_db.h
 #windows:
 cp ./target/release/libarea_db.so ./php_ext/lib/libarea_db.so
@@ -58,3 +56,20 @@ nmake
 ```
 
 > 使用时拷贝 area_db.dll 到 php.exe 的目录
+
+
+#### 测试示例
+
+> area_db.api.php 为测试用示例,可用以下命令测试:
+
+```
+#请先确定 area_db.api.php 中以下数据文件是否存在
+#const CODE_DATA_PATH=__DIR__."/../../data/2023-7-area-code.csv.gz";
+#const GEO_DATA_PATH=__DIR__."/../../data/2023-7-area-geo.csv.gz";
+php -S localhost:8000
+curl 'http://localhost:8000/area_db.api.php?code=4414'
+curl 'http://localhost:8000/area_db.api.php?action=code&code=4414'
+curl 'http://localhost:8000/area_db.api.php?key_word=guangdong&action=search'
+curl 'http://localhost:8000/area_db.api.php?action=related&code=4414'
+curl 'http://localhost:8000/area_db.api.php?action=geo&lat=26.61474&lng=114.13548'
+```

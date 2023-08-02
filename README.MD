@@ -87,10 +87,11 @@ area.code_reload().unwrap();//重新加载CODE数据
 5. FFI导出
 
 > 默认不引入 `lib-clib` ,需要FFI请开启
-
+```
+cargo build --features "lib-clib" 
+```
 ```toml
-#cargo.toml
-#lib-clib 输出c的动态库,用于其他语言对接
+#修改 cargo.toml 添加 lib-clib
 area-db = { version = "~0.0.*",features=["lib-clib"]}
 ```
 
