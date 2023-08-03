@@ -14,7 +14,19 @@
 3. 预计下一步引入：ip对应城市数据
 
 
-##### 使用示例:
+#### 基于 axum 的示例
+```
+cd examples/axum ; cargo run
+#测试接口
+curl 'http://127.0.0.1:8080/area/geo?lat=22.57729&lng=113.89409'
+curl http://127.0.0.1:8080/area/list?code=1101
+curl http://127.0.0.1:8080/area/related?code=4414
+curl http://127.0.0.1:8080/area/find?code=4414
+curl http://127.0.0.1:8080/area/search?key_word=%E6%B7%B1%E5%9C%B3%20%E5%B8%83%E5%90%89
+```
+
+
+##### 代码示例:
 
 1. 请先下载CSV数据文件到你的项目：[城市数据示例](data/2023-7-area-code.csv.gz) [城市坐标示例](data/2023-7-area-geo.csv.gz) 
 

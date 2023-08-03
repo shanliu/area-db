@@ -104,6 +104,9 @@ impl AreaDao {
         self.code.read().search(name, limit)
     }
     pub fn geo_search(&self, lat: f64, lng: f64) -> AreaResult<Vec<AreaCodeItem>> {
+        if !(0.0..=90.0).contains(&lat) || !(0.0..=180.0).contains(&lng) {
+            return Ok(vec![]);
+        }
         let tmp = self.geo.read();
         let code = tmp.search(&geo::coord! { x:lng, y:lat})?;
         self.code.read().find(code)
