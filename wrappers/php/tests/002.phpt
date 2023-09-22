@@ -9,7 +9,7 @@ if (!extension_loaded('area_db')) {
 --FILE--
 <?php
 use LsExt\AreaDb;
-AreaDb::initCsv(__DIR__."/../../../data/2023-7-area-code.csv.gz",__DIR__."/../../../data/2023-7-area-geo.csv.gz",true);
+AreaDb::initCsv(__DIR__."/../../../data/2023-7-area-code.csv.gz",__DIR__."/../../../data/2023-7-area-geo.csv.gz");
 $ret =AreaDb::codeSearch("guangdong");
 echo count($ret);
 $ret =AreaDb::codeSearch("ddddddddddddddddd");

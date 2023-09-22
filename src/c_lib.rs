@@ -1,5 +1,5 @@
 use crate::{AreaCodeItem, AreaCodeRelatedItem, AreaDao, AreaError};
-use std::ffi::{c_char, c_float, c_int, c_uchar, c_uint, CStr, CString};
+use std::ffi::{c_char, c_float, c_int, c_long, c_uchar, c_uint, CStr, CString};
 
 #[repr(C)]
 pub struct CAreaDao {
@@ -74,6 +74,7 @@ macro_rules! call_area_dao {
 pub unsafe extern "C" fn area_db_init_csv(
     code_path: *const c_char,
     geo_path: *const c_char,
+    index_size: c_long,
     gz: *const c_uchar,
     area_dao: *mut *mut CAreaDao,
     error: *mut *mut c_char,
@@ -99,10 +100,71 @@ pub unsafe extern "C" fn area_db_init_csv(
         crate::CsvAreaGeoData::from_inner_path(PathBuf::from(geo_file), *gz != 0),
         error
     ));
+
+    let index_size = index_size as usize;
+
     let area_obj = unwrap_or_c_error!(
         AreaDao::from_csv_mem(
             crate::CsvAreaData::new(code_config, geo_config),
-            AreaStoreMemory::default()
+            if index_size > 0 {
+                AreaStoreMemory::new(index_size)
+            } else {
+                AreaStoreMemory::default()
+            }
+        ),
+        error
+    );
+    init_area(area_dao, area_obj)
+}
+
+/// # Safety
+///
+/// 用于外部C函数调用进行初始化结构
+/// 不要在RUST调用
+///
+#[cfg(all(feature = "data-csv", feature = "index-disk"))]
+#[no_mangle]
+pub unsafe extern "C" fn area_db_init_csv_on_disk(
+    code_path: *const c_char,
+    geo_path: *const c_char,
+    index_size: c_long,
+    index_disk: *const c_char,
+    gz: *const c_uchar,
+    area_dao: *mut *mut CAreaDao,
+    error: *mut *mut c_char,
+) -> c_int {
+    use crate::AreaStoreDisk;
+    use std::path::PathBuf;
+    *error = std::ptr::null_mut();
+    *area_dao = std::ptr::null_mut();
+    let code_file = cstr_to_string!(code_path, error);
+    let code_config = Some(unwrap_or_c_error!(
+        crate::CsvAreaCodeData::from_inner_path(PathBuf::from(code_file), *gz != 0),
+        error
+    ));
+    let code_config = match code_config {
+        Some(c) => c,
+        None => {
+            set_c_error!("csv path can't be empty", error);
+            return 1;
+        }
+    };
+    let geo_file = cstr_to_string!(geo_path, error);
+    let geo_config = Some(unwrap_or_c_error!(
+        crate::CsvAreaGeoData::from_inner_path(PathBuf::from(geo_file), *gz != 0),
+        error
+    ));
+
+    let index_size = index_size as usize;
+    let index_disk_dir = cstr_to_string!(index_disk, error);
+    let area_obj = unwrap_or_c_error!(
+        AreaDao::from_csv_disk(
+            crate::CsvAreaData::new(code_config, geo_config),
+            if index_size > 0 {
+                AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), Some(index_size))
+            } else {
+                AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), None)
+            }
         ),
         error
     );
@@ -118,6 +180,7 @@ pub unsafe extern "C" fn area_db_init_csv(
 #[no_mangle]
 pub unsafe extern "C" fn area_db_init_sqlite(
     db_path: *const c_char,
+    index_size: c_long,
     area_dao: *mut *mut CAreaDao,
     error: *mut *mut c_char,
 ) -> c_int {
@@ -134,10 +197,61 @@ pub unsafe extern "C" fn area_db_init_sqlite(
     let geo_config = Some(crate::SqliteAreaGeoData::from_path(PathBuf::from(
         &file_config,
     )));
+
+    let index_size = index_size as usize;
+
     let area_obj = unwrap_or_c_error!(
         AreaDao::from_sqlite_mem(
             crate::SqliteAreaData::new(code_config, geo_config),
-            AreaStoreMemory::default()
+            if index_size > 0 {
+                AreaStoreMemory::new(index_size)
+            } else {
+                AreaStoreMemory::default()
+            }
+        ),
+        error
+    );
+    init_area(area_dao, area_obj)
+}
+
+/// # Safety
+///
+/// 用于外部C函数调用进行初始化结构
+/// 不要在RUST调用
+///
+#[cfg(all(feature = "data-sqlite", feature = "index-disk"))]
+#[no_mangle]
+pub unsafe extern "C" fn area_db_init_sqlite_on_disk(
+    db_path: *const c_char,
+    index_size: c_long,
+    index_disk: *const c_char,
+    area_dao: *mut *mut CAreaDao,
+    error: *mut *mut c_char,
+) -> c_int {
+    use crate::AreaStoreDisk;
+    use std::path::PathBuf;
+    *error = std::ptr::null_mut();
+    *area_dao = std::ptr::null_mut();
+    let file_config = cstr_to_string!(db_path, error);
+    if file_config.trim().is_empty() {
+        set_c_error!("sqlite path can't be empty", error);
+        return 1;
+    }
+    let code_config = crate::SqliteAreaCodeData::from_path(PathBuf::from(&file_config));
+    let geo_config = Some(crate::SqliteAreaGeoData::from_path(PathBuf::from(
+        &file_config,
+    )));
+
+    let index_size = index_size as usize;
+    let index_disk_dir = cstr_to_string!(index_disk, error);
+    let area_obj = unwrap_or_c_error!(
+        AreaDao::from_sqlite_disk(
+            crate::SqliteAreaData::new(code_config, geo_config),
+            if index_size > 0 {
+                AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), Some(index_size))
+            } else {
+                AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), None)
+            }
         ),
         error
     );
@@ -153,6 +267,7 @@ pub unsafe extern "C" fn area_db_init_sqlite(
 #[no_mangle]
 pub unsafe extern "C" fn area_db_init_mysql(
     db_uri: *const c_char,
+    index_size: c_long,
     area_dao: *mut *mut CAreaDao,
     error: *mut *mut c_char,
 ) -> c_int {
@@ -166,10 +281,61 @@ pub unsafe extern "C" fn area_db_init_mysql(
     }
     let code_config = crate::MysqlAreaCodeData::from_uri(&uri_config, None);
     let geo_config = Some(crate::MysqlAreaGeoData::from_uri(&uri_config, None));
+
+    let index_size = index_size as usize;
+
     let area_obj = unwrap_or_c_error!(
         AreaDao::from_mysql_mem(
             crate::MysqlAreaData::new(code_config, geo_config),
-            AreaStoreMemory::default()
+            if index_size > 0 {
+                AreaStoreMemory::new(index_size)
+            } else {
+                AreaStoreMemory::default()
+            }
+        ),
+        error
+    );
+    init_area(area_dao, area_obj)
+}
+
+/// # Safety
+///
+/// 用于外部C函数调用进行初始化结构
+/// 不要在RUST调用
+///
+#[cfg(all(feature = "data-mysql", feature = "index-disk"))]
+#[no_mangle]
+pub unsafe extern "C" fn area_db_init_mysql_on_disk(
+    db_uri: *const c_char,
+    index_size: c_long,
+    index_disk: *const c_char,
+    area_dao: *mut *mut CAreaDao,
+    error: *mut *mut c_char,
+) -> c_int {
+    use std::path::PathBuf;
+
+    use crate::AreaStoreDisk;
+    *error = std::ptr::null_mut();
+    *area_dao = std::ptr::null_mut();
+    let uri_config = cstr_to_string!(db_uri, error);
+    if uri_config.trim().is_empty() {
+        set_c_error!("mysql uri can't be empty", error);
+        return 1;
+    }
+    let code_config = crate::MysqlAreaCodeData::from_uri(&uri_config, None);
+    let geo_config = Some(crate::MysqlAreaGeoData::from_uri(&uri_config, None));
+
+    let index_size = index_size as usize;
+
+    let index_disk_dir = cstr_to_string!(index_disk, error);
+    let area_obj = unwrap_or_c_error!(
+        AreaDao::from_mysql_disk(
+            crate::MysqlAreaData::new(code_config, geo_config),
+            if index_size > 0 {
+                AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), Some(index_size))
+            } else {
+                AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), None)
+            }
         ),
         error
     );

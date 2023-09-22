@@ -69,6 +69,7 @@ fn mmap_find_code_index_info(
         let ptr = mmap[info_len + version_len + index * item_len..].as_ptr()
             as *const (u64, bool, usize, usize);
         let tmp: (u64, bool, usize, usize) = ptr.read();
+        // println!("{:?}:{}", tmp, index);
         // 读取20字节长度数据
         let key_start = index * item_len + info_len + version_len + prefix;
         let key_end = tmp.2;
@@ -114,9 +115,9 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
             let item_len = prefix + max_key_length + max_value_length;
 
             let find_start = index.parse::<u64>().unwrap_or(0);
-            let start_index = if find_start > 0 {
+            let (start_index, start_code) = if find_start > 0 {
+                //折半查找。。。fix...
                 let mut start = max_len / 2;
-
                 loop {
                     if start > 0 {
                         mmap_check_index(max_len, start).ok()?;
@@ -126,19 +127,25 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
                             ptr.read()
                         };
                         if code == 0 {
-                            break 0;
+                            break (0, 0);
                         }
                         if code > find_start {
                             start /= 2;
                             continue;
+                        } else {
+                            let add_tmp = start / 2;
+                            if add_tmp == 0 {
+                                break (start, code);
+                            }
+                            start += add_tmp;
                         }
                     }
-                    break start;
+                    break (0, 0);
                 }
             } else {
-                0
+                (0, 0)
             };
-            if start_index > 0 && start_index as u64 == find_start {
+            if start_index > 0 && start_code == find_start {
                 let mut prev_index = start_index;
                 loop {
                     let (code, key, val) = mmap_find_code_index_info(mmap, prev_index).ok()?;
@@ -187,7 +194,7 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
         vec_data.sort_by(|a, b| a.0.cmp(&b.0));
         //元素数量，最大key长度，最大value长度，版本信息长度+ 版本内容长度
         let info_len = std::mem::size_of::<(usize, usize, usize, usize)>() + version.len();
-        let prefix = std::mem::size_of::<(u64, usize, usize)>();
+        let prefix = std::mem::size_of::<(u64, bool, usize, usize)>();
         let item_len = prefix + max_key_length + max_value_length;
         file.set_len((info_len + item_len * max_len) as u64)?;
         file.seek(SeekFrom::Start(0))?;
@@ -309,7 +316,7 @@ fn mmap_code_tree_childs(mmap: &Mmap, index: &str) -> Option<Vec<(String, bool)>
     }
 
     let find_start = index.parse::<u64>().unwrap_or(0);
-    let start_index = if find_start > 0 {
+    let (start_index, start_code) = if find_start > 0 {
         let mut start = max_len / 2;
 
         loop {
@@ -321,19 +328,21 @@ fn mmap_code_tree_childs(mmap: &Mmap, index: &str) -> Option<Vec<(String, bool)>
                     ptr.read()
                 };
                 if code == 0 {
-                    break 0;
+                    break (0, 0);
                 }
                 if code > find_start {
                     start /= 2;
                     continue;
+                } else {
+                    break (start, code);
                 }
             }
-            break start;
+            break (0, 0);
         }
     } else {
-        0
+        (0, 0)
     };
-    if start_index > 0 && start_index as u64 == find_start {
+    if start_index > 0 && start_code == find_start {
         let mut prev_index = start_index;
         loop {
             let (code, key, val) = mmap_find_code_tree(mmap, prev_index).ok()?;
@@ -385,15 +394,18 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
     fn add(&mut self, code_data: Vec<&str>) -> AreaResult<()> {
         let mut perv = self.data.entry("".to_string());
         for ddd in code_data {
+            let code = ddd.to_string();
             match perv {
                 Entry::Occupied(mut tmp) => {
-                    tmp.get_mut().push(ddd.to_string());
+                    if !tmp.get().contains(&code) {
+                        tmp.get_mut().push(code.clone());
+                    }
                 }
                 Entry::Vacant(tmp) => {
-                    tmp.insert(vec![ddd.to_string()]);
+                    tmp.insert(vec![code.clone()]);
                 }
             };
-            perv = self.data.entry(ddd.to_string());
+            perv = self.data.entry(code);
         }
         Ok(())
     }
@@ -465,6 +477,11 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
                 as *const (u64, usize, usize, usize) as *const u8;
             let ptr = mmap.as_mut_ptr();
             unsafe {
+                // println!(
+                //     "{:?},{}",
+                //     (index, key.len(), max_tree_count, max_tree_length),
+                //     i * item_len + info_len
+                // );
                 std::ptr::copy_nonoverlapping(tmp, ptr.add(i * item_len + info_len), prefix);
                 let key_start = i * item_len + info_len + prefix;
                 std::ptr::copy_nonoverlapping(
@@ -706,7 +723,7 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
         let item_len = polygon_prefix + max_polygon_size * polygon_geo_size;
 
         let find_start = *index;
-        let start_index = if find_start > 0 {
+        let (start_index, start_code) = if find_start > 0 {
             let mut start = max_len / 2;
             loop {
                 if start > 0 {
@@ -716,19 +733,21 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
                         ptr.read()
                     };
                     if code == 0 {
-                        break 0;
+                        break (0, 0);
                     }
                     if code > find_start {
                         start /= 2;
                         continue;
+                    } else {
+                        break (start, code);
                     }
                 }
-                break start;
+                break (0, 0);
             }
         } else {
-            0
+            (0, 0)
         };
-        if start_index > 0 && start_index as u64 == find_start {
+        if start_index > 0 && start_code == find_start {
             let mut prev_index = start_index;
             loop {
                 let (code, info) = mmap_find_polygon_data(mmap, prev_index)?;

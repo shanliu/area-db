@@ -64,16 +64,29 @@ ZEND_METHOD(AreaDb, initCsv){
     char *geo_file;
     size_t geo_file_len=0;
     zend_bool gz=0;
+    zend_long index_size=0;
+    char *index_path;
+    size_t index_path_len=0;
 
 #if PHP_VERSION_ID < 80000
-    if (zend_parse_parameters(ZEND_NUM_ARGS(), "pp|b", &code_file, &code_file_len, &geo_file, &geo_file_len,&gz) == FAILURE) {
+    if (zend_parse_parameters(
+            ZEND_NUM_ARGS(), 
+            "pp|plb", 
+            &code_file, &code_file_len, 
+            &geo_file, &geo_file_len,
+            &index_path, &index_path_len,
+            &index_size,
+            &gz
+        ) == FAILURE) {
         return;
     }
 #else
-    ZEND_PARSE_PARAMETERS_START(2, 3)
+    ZEND_PARSE_PARAMETERS_START(2, 5)
         Z_PARAM_PATH(code_file, code_file_len)
         Z_PARAM_PATH(geo_file, geo_file_len)
         Z_PARAM_OPTIONAL
+        Z_PARAM_PATH(index_path, index_path_len)
+        Z_PARAM_LONG(index_size)
         Z_PARAM_BOOL(gz)
     ZEND_PARSE_PARAMETERS_END();
 #endif
@@ -82,7 +95,11 @@ ZEND_METHOD(AreaDb, initCsv){
     unsigned char sgz=gz==0?0:1;
 CAREA_W_LOCK()
     if (GET_CAREA_DAO() == NULL) {
-        ret_no=area_db_init_csv(code_file,geo_file,&sgz,&GET_CAREA_DAO(),&ret_err);
+        if(index_path_len==0){
+            ret_no=area_db_init_csv(code_file,geo_file,index_size,&sgz,&GET_CAREA_DAO(),&ret_err);
+        }else{
+            ret_no=area_db_init_csv_on_disk(code_file,geo_file,index_size,index_path,&sgz,&GET_CAREA_DAO(),&ret_err);
+        }
     }
 CAREA_W_UNLOCK()
     if (ret_no!=0){
@@ -93,13 +110,27 @@ CAREA_W_UNLOCK()
 ZEND_METHOD(AreaDb, initSqlite){
     char *filename;
     size_t filename_len;
+
+    zend_long index_size=0;
+    char *index_path;
+    size_t index_path_len=0;
+
 #if PHP_VERSION_ID < 80000
-    if (zend_parse_parameters(ZEND_NUM_ARGS(), "p", &filename, &filename_len) == FAILURE) {
+    if (zend_parse_parameters(
+            ZEND_NUM_ARGS(), 
+            "p|pl", 
+            &filename, &filename_len,
+            &index_path, &index_path_len,
+            &index_size,
+        ) == FAILURE) {
             return;
         }
 #else
-    ZEND_PARSE_PARAMETERS_START(1, 1)
+    ZEND_PARSE_PARAMETERS_START(1, 3)
         Z_PARAM_PATH(filename, filename_len)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_PATH(index_path, index_path_len)
+        Z_PARAM_LONG(index_size)
     ZEND_PARSE_PARAMETERS_END();
 #endif
 
@@ -108,7 +139,13 @@ ZEND_METHOD(AreaDb, initSqlite){
     int ret_no=0;
     CAREA_W_LOCK()
     if (GET_CAREA_DAO()  == NULL) {
-        ret_no=area_db_init_sqlite(filename,&GET_CAREA_DAO() ,&ret_err);
+
+        f(index_path_len==0){
+             ret_no=area_db_init_sqlite(filename,index_size,&GET_CAREA_DAO() ,&ret_err);
+        }else{
+             ret_no=area_db_init_sqlite_on_disk(filename,index_size,index_path,&GET_CAREA_DAO() ,&ret_err);
+        }
+       
     }
     CAREA_W_UNLOCK()
     if (ret_no!=0){
@@ -124,20 +161,41 @@ ZEND_METHOD(AreaDb, initSqlite){
 ZEND_METHOD(AreaDb, initMysql){
     char *uri;
     size_t uri_len;
+    zend_long index_size=0;
+    char *index_path;
+    size_t index_path_len=0;
+
 #if PHP_VERSION_ID < 80000
-    if (zend_parse_parameters(ZEND_NUM_ARGS(), "p", &uri, &uri_len) == FAILURE) {
+    if (zend_parse_parameters(
+            ZEND_NUM_ARGS(), 
+            "p|pl", 
+            &uri, &uri_len,
+            &index_path, &index_path_len,
+            &index_size,
+        ) == FAILURE) {
             return;
         }
 #else
-    ZEND_PARSE_PARAMETERS_START(1, 1)
+    ZEND_PARSE_PARAMETERS_START(1, 3)
         Z_PARAM_PATH(uri, uri_len)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_PATH(index_path, index_path_len)
+        Z_PARAM_LONG(index_size)
     ZEND_PARSE_PARAMETERS_END();
 #endif
 #if HAVE_AREA_DB_USE_MYSQL
     char *ret_err=NULL;
     int ret_no=0;
     if (GET_CAREA_DAO()  == NULL) {
-        ret_no=area_db_init_mysql(uri,&GET_CAREA_DAO() ,&ret_err);
+
+
+        if(index_path_len==0){
+             ret_no=area_db_init_mysql(uri,index_size,&GET_CAREA_DAO() ,&ret_err);
+        }else{
+             ret_no=area_db_init_mysql_on_disk(uri,index_size,index_path,&GET_CAREA_DAO() ,&ret_err);
+        }
+
+       
     }
     if (ret_no!=0){
         throw_area_exception(ret_no,"init mysql fail:%s",ret_err);

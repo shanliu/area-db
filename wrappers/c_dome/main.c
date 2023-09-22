@@ -174,11 +174,20 @@ void test_code_search(CAreaDao* area_dao){
 }
 
 
+
+
 int main() {
     CAreaDao* area_dao;
     char * err;
     char gz=1;
-    int ret=area_db_init_csv("../../data/2023-7-area-code.csv.gz","../../data/2023-7-area-geo.csv.gz",&gz,&area_dao,&err);
+    int ret=area_db_init_csv(
+            "../../data/2023-7-area-code.csv.gz",
+            "../../data/2023-7-area-geo.csv.gz",
+            0,
+            &gz,
+            &area_dao,
+            &err
+        );
     if (ret!=0){
         printf("err:%s\n",err);
         area_db_release_error_str(err);

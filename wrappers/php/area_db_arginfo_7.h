@@ -24,17 +24,26 @@ ZEND_ARG_INFO(0, lng)
 ZEND_END_ARG_INFO()
 
 
+
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_initCsv, 0,0, 2)
-	ZEND_ARG_INFO(0,code_path)
-	ZEND_ARG_INFO(0, geo_path)
+	ZEND_ARG_INFO(1,code_path)
+	ZEND_ARG_INFO(1, geo_path)
+	ZEND_ARG_INFO(0, index_path)
+	ZEND_ARG_INFO(0, index_size)
+	ZEND_ARG_INFO(0, gz)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_initSqlite, 0, 0,1)
-	ZEND_ARG_INFO(0, sqlite_sql)
+	ZEND_ARG_INFO(1, sqlite_sql)
+	ZEND_ARG_INFO(0, index_path)
+	ZEND_ARG_INFO(0, index_size)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_initMysql, 0, 0,1)
-	ZEND_ARG_INFO(0, uri)
+	ZEND_ARG_INFO(1, uri)
+	ZEND_ARG_INFO(0, index_path)
+	ZEND_ARG_INFO(0, index_size)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_shutdown, 0, 0, 0)
@@ -54,15 +63,15 @@ ZEND_ARG_INFO(0, code)
 ZEND_END_ARG_INFO()
 
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_codeSearch, 0, 0,  2)
-	ZEND_ARG_INFO(0, code)
+ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_codeSearch, 0, 0,  1)
+	ZEND_ARG_INFO(1, code)
 	ZEND_ARG_INFO(0, limit)
 ZEND_END_ARG_INFO()
 
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_AreaDb_geoSearch, 0,0, 2)
-	ZEND_ARG_INFO(0, lat)
-	ZEND_ARG_INFO(0, lng)
+	ZEND_ARG_INFO(1, lat)
+	ZEND_ARG_INFO(1, lng)
 ZEND_END_ARG_INFO()
 
 

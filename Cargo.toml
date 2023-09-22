@@ -27,7 +27,7 @@ clap = "3.2.25"
 parking_lot = "0.12.1"
 tantivy = "0.21.0"
 unicode-segmentation = "1.10.1"
-memmap2 ={ version = "0.3", optional = true } 
+memmap2 = { version = "0.3", optional = true }
 
 [build-dependencies]
 cc = "~1.0.*"
@@ -41,11 +41,13 @@ crate-type = ["cdylib", "rlib"]
 
 
 [features]
-default = ["data-csv", 
-#"data-sqlite-source", 
-#"data-mysql", 
-#"lib-clib",
-"index-disk"]
+default = [
+    "data-csv",
+    # "data-sqlite-source",
+    # "data-mysql",
+    # "lib-clib",
+    "index-disk",
+]
 #启用C库接口
 lib-clib = []
 #启用CSV数据源

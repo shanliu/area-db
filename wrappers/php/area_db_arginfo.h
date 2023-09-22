@@ -1,17 +1,24 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: f531437cb3d3edafd04aa7431c5e3b1e706f6e11 */
+ * Stub hash: d7443d1c29ce95c90974e5ef6755e4ab3c377bae */
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_LsExt_AreaDb_initCsv, 0, 0, IS_VOID, 0)
-	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, code_path, IS_STRING, 0, "NULL")
-	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, geo_path, IS_STRING, 0, "NULL")
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_LsExt_AreaDb_initCsv, 0, 2, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, code_path, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, geo_path, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, index_path, IS_STRING, 0, "NULL")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, index_size, IS_LONG, 0, "0")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, gz, _IS_BOOL, 0, "true")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_LsExt_AreaDb_initSqlite, 0, 1, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO(0, sqlite_sql, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, index_path, IS_STRING, 0, "NULL")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, index_size, IS_LONG, 0, "0")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_LsExt_AreaDb_initMysql, 0, 1, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO(0, uri, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, index_path, IS_STRING, 0, "NULL")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, index_size, IS_LONG, 0, "0")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_LsExt_AreaDb_shutdown, 0, 0, IS_VOID, 0)
@@ -25,9 +32,9 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_LsExt_AreaDb_codeChilds, 0
 	ZEND_ARG_TYPE_INFO(0, code, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_LsExt_AreaDb_codeSearch, 0, 2, IS_ARRAY, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_LsExt_AreaDb_codeSearch, 0, 1, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, code, IS_STRING, 0)
-	ZEND_ARG_TYPE_INFO(0, limit, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, limit, IS_LONG, 0, "10")
 ZEND_END_ARG_INFO()
 
 #define arginfo_class_LsExt_AreaDb_codeFind arginfo_class_LsExt_AreaDb_codeChilds
