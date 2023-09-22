@@ -1,29 +1,31 @@
-/*
 #[cfg(feature = "data-mysql")]
 #[test]
 fn test_mysql() {
-    let uri = "mysql://root:000@127.0.0.1:3306/test";
+    use area_db::AreaStoreMemory;
+    let uri = "mysql://root:@127.0.0.1:3306/test";
     let mysql = area_db::MysqlAreaData::new(
-        area_db::MysqlAreaCodeData::from_uri(uri),
-        Some(area_db::MysqlAreaGeoData::from_uri(uri)),
+        area_db::MysqlAreaCodeData::from_uri(uri, None),
+        Some(area_db::MysqlAreaGeoData::from_uri(uri, None)),
     );
-    let area = area_db::AreaDao::new(mysql).unwrap();
+    let area = area_db::AreaDao::from_mysql_mem(mysql, AreaStoreMemory::default()).unwrap();
     test_branch(&area);
     area.geo_reload().unwrap();
     area.code_reload().unwrap();
     test_branch(&area);
 }
-*/
+
 #[cfg(any(feature = "data-sqlite", feature = "data-sqlite-source"))]
 #[test]
 fn test_sqlite() {
     use std::path::PathBuf;
+
+    use area_db::AreaStoreMemory;
     let uri = "data/area-data.db";
     let sqlite = area_db::SqliteAreaData::new(
         area_db::SqliteAreaCodeData::from_path(PathBuf::from(uri)),
         Some(area_db::SqliteAreaGeoData::from_path(PathBuf::from(uri))),
     );
-    let area = area_db::AreaDao::new(sqlite).unwrap();
+    let area = area_db::AreaDao::from_sqlite_mem(sqlite, AreaStoreMemory::default()).unwrap();
     test_branch(&area);
     area.geo_reload().unwrap();
     area.code_reload().unwrap();
@@ -33,6 +35,8 @@ fn test_sqlite() {
 #[cfg(feature = "data-csv")]
 #[test]
 fn test_csv() {
+    use area_db::AreaStoreMemory;
+
     let code_path = std::path::PathBuf::from(format!(
         "{}/data/2023-7-area-code.csv.gz",
         env!("CARGO_MANIFEST_DIR")
@@ -48,7 +52,7 @@ fn test_csv() {
         area_db::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
         geo_data,
     );
-    test_branch(&area_db::AreaDao::new(data).unwrap());
+    test_branch(&area_db::AreaDao::from_csv_mem(data, AreaStoreMemory::default()).unwrap());
 }
 
 #[allow(dead_code)]

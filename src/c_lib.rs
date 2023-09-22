@@ -1,7 +1,6 @@
 use crate::{AreaCodeItem, AreaCodeRelatedItem, AreaDao, AreaError};
 use std::ffi::{c_char, c_float, c_int, c_uchar, c_uint, CStr, CString};
 
-
 #[repr(C)]
 pub struct CAreaDao {
     dao: *mut AreaDao,
@@ -79,6 +78,7 @@ pub unsafe extern "C" fn area_db_init_csv(
     area_dao: *mut *mut CAreaDao,
     error: *mut *mut c_char,
 ) -> c_int {
+    use crate::AreaStoreMemory;
     use std::path::PathBuf;
     *error = std::ptr::null_mut();
     *area_dao = std::ptr::null_mut();
@@ -100,7 +100,10 @@ pub unsafe extern "C" fn area_db_init_csv(
         error
     ));
     let area_obj = unwrap_or_c_error!(
-        AreaDao::new(crate::CsvAreaData::new(code_config, geo_config)),
+        AreaDao::from_csv_mem(
+            crate::CsvAreaData::new(code_config, geo_config),
+            AreaStoreMemory::default()
+        ),
         error
     );
     init_area(area_dao, area_obj)
@@ -118,6 +121,7 @@ pub unsafe extern "C" fn area_db_init_sqlite(
     area_dao: *mut *mut CAreaDao,
     error: *mut *mut c_char,
 ) -> c_int {
+    use crate::AreaStoreMemory;
     use std::path::PathBuf;
     *error = std::ptr::null_mut();
     *area_dao = std::ptr::null_mut();
@@ -131,7 +135,10 @@ pub unsafe extern "C" fn area_db_init_sqlite(
         &file_config,
     )));
     let area_obj = unwrap_or_c_error!(
-        AreaDao::new(crate::SqliteAreaData::new(code_config, geo_config)),
+        AreaDao::from_sqlite_mem(
+            crate::SqliteAreaData::new(code_config, geo_config),
+            AreaStoreMemory::default()
+        ),
         error
     );
     init_area(area_dao, area_obj)
@@ -149,6 +156,7 @@ pub unsafe extern "C" fn area_db_init_mysql(
     area_dao: *mut *mut CAreaDao,
     error: *mut *mut c_char,
 ) -> c_int {
+    use crate::AreaStoreMemory;
     *error = std::ptr::null_mut();
     *area_dao = std::ptr::null_mut();
     let uri_config = cstr_to_string!(db_uri, error);
@@ -156,10 +164,13 @@ pub unsafe extern "C" fn area_db_init_mysql(
         set_c_error!("mysql uri can't be empty", error);
         return 1;
     }
-    let code_config = crate::MysqlAreaCodeData::from_uri(&uri_config);
-    let geo_config = Some(crate::MysqlAreaGeoData::from_uri(&uri_config));
+    let code_config = crate::MysqlAreaCodeData::from_uri(&uri_config, None);
+    let geo_config = Some(crate::MysqlAreaGeoData::from_uri(&uri_config, None));
     let area_obj = unwrap_or_c_error!(
-        AreaDao::new(crate::MysqlAreaData::new(code_config, geo_config)),
+        AreaDao::from_mysql_mem(
+            crate::MysqlAreaData::new(code_config, geo_config),
+            AreaStoreMemory::default()
+        ),
         error
     );
     init_area(area_dao, area_obj)
@@ -548,7 +559,6 @@ pub unsafe extern "C" fn area_db_geo_search(
     out_data: *mut *mut CAreaItemVec,
     error: *mut *mut c_char,
 ) -> c_int {
-
     *error = std::ptr::null_mut();
     let data = call_area_dao!(area_dao, error, geo_search, [lat as f64, lng as f64]);
     *out_data = Box::into_raw(Box::new(area_item_to_ptr(data)));

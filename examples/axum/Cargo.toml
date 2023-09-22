@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 axum = { version = "0.6.19" }
 tokio = { version = "1.0", features = ["full"] }
-area-db = { version = "0.0.*", path = "../../" }
+area-db = { version = "0.0.*", path = "../../", features = ["data-csv","index-disk"] }
 serde = { version = "1.0.*" }
 serde_json = "1.0.*"
+temp-dir = "0.1.11"

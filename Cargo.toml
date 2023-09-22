@@ -18,7 +18,6 @@ repository = "https://github.com/shanliu/area-db"
 [dependencies]
 geo = "~0.25.*"
 rayon = "~1.5.*"
-num_cpus = "~1.16.*"
 flate2 = "~1.0.*"
 rusqlite = { version = "0.29.0", optional = true }
 csv = { version = "1.2.2", optional = true }
@@ -26,6 +25,9 @@ mysql = { version = "24.0.0", optional = true }
 log = "0.4.17"
 clap = "3.2.25"
 parking_lot = "0.12.1"
+tantivy = "0.21.0"
+unicode-segmentation = "1.10.1"
+memmap2 ={ version = "0.3", optional = true } 
 
 [build-dependencies]
 cc = "~1.0.*"
@@ -39,12 +41,11 @@ crate-type = ["cdylib", "rlib"]
 
 
 [features]
-default = [
-    "data-csv",
-    # "data-sqlite-source", 
-    # "data-mysql", 
-    # "lib-clib",
-]
+default = ["data-csv", 
+#"data-sqlite-source", 
+#"data-mysql", 
+#"lib-clib",
+"index-disk"]
 #启用C库接口
 lib-clib = []
 #启用CSV数据源
@@ -55,3 +56,5 @@ data-sqlite = ["rusqlite"]
 data-sqlite-source = ["data-sqlite"]
 #启用mysql数据源支持
 data-mysql = ["mysql"]
+#索引数据使用硬盘存储
+index-disk = ["memmap2"]

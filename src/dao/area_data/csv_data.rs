@@ -1,11 +1,14 @@
 use std::path::PathBuf;
 
 use csv::{ReaderBuilder, StringRecord};
-use parking_lot::Mutex;
+use unicode_segmentation::UnicodeSegmentation;
 
-use crate::{AreaCodeData, AreaDataProvider, AreaError, AreaGeoData, AreaGeoDataItem, AreaResult};
+use crate::{
+    dao::utils::name_clear, AreaCodeData, AreaDataProvider, AreaError, AreaGeoData,
+    AreaGeoDataItem, AreaResult,
+};
 
-use super::utils::{de_gz_data, read_file, read_file_modified_time};
+use super::utils::{de_gz_data, en_name_keyword, read_file, read_file_modified_time};
 impl From<std::io::Error> for AreaError {
     fn from(err: std::io::Error) -> Self {
         AreaError::DB(err.to_string())
@@ -14,11 +17,12 @@ impl From<std::io::Error> for AreaError {
 pub struct CsvAreaCodeData {
     csv_data: PathBuf,
     gz: bool,
-    skip: usize,              //跳过头部n行
-    column_name: u8,          //城市完整名字段，从0开始
-    column_code: u8,          //城市编码字段，从0开始
-    column_hide: u8,          //是否隐藏字段，可忽略
-    column_key_word: Vec<u8>, //搜索关键字字段，可忽略
+    skip: usize,        //跳过头部n行
+    column_name: u8,    //城市完整名字段，从0开始
+    column_code: u8,    //城市编码字段，从0开始
+    column_hide: u8,    //是否隐藏字段，可忽略
+    column_keyword: i8, //关键字字段
+    column_enname: i8,  //英文名字段
 }
 
 impl CsvAreaCodeData {
@@ -28,7 +32,8 @@ impl CsvAreaCodeData {
         column_name: u8,
         column_code: u8,
         column_hide: u8,
-        column_key_word: Vec<u8>,
+        column_keyword: i8,
+        column_enname: i8,
     ) -> Self {
         Self {
             csv_data,
@@ -37,7 +42,8 @@ impl CsvAreaCodeData {
             column_name,
             column_code,
             column_hide,
-            column_key_word,
+            column_keyword,
+            column_enname,
         }
     }
     fn create_inner_data(csv_data: PathBuf, gz: bool) -> Self {
@@ -48,7 +54,8 @@ impl CsvAreaCodeData {
             column_code: 0,
             column_name: 1,
             column_hide: 4,
-            column_key_word: vec![2, 3],
+            column_keyword: 2,
+            column_enname: 3,
         }
     }
     /// csv_data csv文件路径
@@ -110,16 +117,12 @@ impl CsvAreaGeoData {
 pub struct CsvAreaData {
     code_config: CsvAreaCodeData,
     geo_config: Option<CsvAreaGeoData>,
-    code_file_time: Mutex<Option<u64>>,
-    geo_file_time: Mutex<Option<u64>>,
 }
 impl CsvAreaData {
     pub fn new(code_config: CsvAreaCodeData, geo_config: Option<CsvAreaGeoData>) -> Self {
         Self {
             code_config,
             geo_config,
-            code_file_time: Mutex::new(None),
-            geo_file_time: Mutex::new(None),
         }
     }
     fn read_data<T>(
@@ -145,13 +148,12 @@ impl CsvAreaData {
     }
 }
 impl AreaDataProvider for CsvAreaData {
-    fn read_code_data(&self) -> AreaResult<Vec<AreaCodeData>> {
+    fn code_data(&self) -> AreaResult<Vec<AreaCodeData>> {
         let mut csv_data = read_file(&self.code_config.csv_data)?;
         if self.code_config.gz {
             csv_data = de_gz_data(csv_data)?;
         }
-        let u = read_file_modified_time(&self.code_config.csv_data);
-        *self.code_file_time.lock() = u;
+
         self.read_data(&csv_data, self.code_config.skip, |row| {
             if let Some(code) = row.get(self.code_config.column_code as usize) {
                 if code.is_empty() {
@@ -161,21 +163,32 @@ impl AreaDataProvider for CsvAreaData {
                 let name = row
                     .get(self.code_config.column_name as usize)
                     .unwrap_or_default();
-                let mut key_word = vec![];
-                for tmp in self.code_config.column_key_word.iter() {
-                    let keyword = row.get(*tmp as usize).unwrap_or("");
-                    let tmp = keyword
-                        .split('|')
-                        .filter(|e| !e.is_empty())
-                        .map(|e| e.to_owned())
-                        .collect::<Vec<_>>();
-                    key_word.extend(tmp);
+                let mut key_word = "".to_string();
+                if self.code_config.column_keyword >= 0 {
+                    let word = row
+                        .get(self.code_config.column_keyword as usize)
+                        .unwrap_or("")
+                        .trim();
+                    if !word.is_empty() {
+                        key_word = word.unicode_words().collect::<Vec<&str>>().join(" ");
+                    }
+                }
+                let mut en_key_word = "".to_string();
+                if self.code_config.column_enname >= 0 {
+                    let en_name = row
+                        .get(self.code_config.column_enname as usize)
+                        .unwrap_or("")
+                        .trim();
+                    if !en_name.is_empty() {
+                        en_key_word =
+                            en_name.to_lowercase() + " " + en_name_keyword(en_name).as_str();
+                    }
                 }
                 let item = AreaCodeData {
                     code: code.to_owned(),
                     hide: hide == "1" || name.is_empty(),
-                    name: name.to_owned(),
-                    key_word,
+                    name: name_clear(name),
+                    key_word: key_word + " " + en_key_word.as_str(),
                 };
                 Some(item)
             } else {
@@ -183,15 +196,14 @@ impl AreaDataProvider for CsvAreaData {
             }
         })
     }
-    fn read_geo_data(&self) -> AreaResult<Vec<AreaGeoData>> {
+    fn geo_data(&self) -> AreaResult<Vec<AreaGeoData>> {
         match &self.geo_config {
             Some(geo_config) => {
                 let mut csv_data = read_file(&geo_config.csv_data)?;
                 if geo_config.gz {
                     csv_data = de_gz_data(csv_data)?;
                 }
-                let u = read_file_modified_time(&geo_config.csv_data);
-                *self.geo_file_time.lock() = u;
+
                 let out = self.read_data(&csv_data, geo_config.skip, |row| {
                     if let Some(code) = row.get(geo_config.column_code as usize) {
                         if !geo_config.code_len.contains(&code.len()) {
@@ -217,22 +229,18 @@ impl AreaDataProvider for CsvAreaData {
             None => Ok(vec![]),
         }
     }
-    fn code_data_is_change(&self) -> bool {
+    fn code_data_version(&self) -> String {
         if let Some(lt) = read_file_modified_time(&self.code_config.csv_data) {
-            if let Some(st) = *self.code_file_time.lock() {
-                return lt > st;
-            }
+            return format!("code-{}", lt);
         }
-        false
+        "".to_string()
     }
-    fn geo_data_is_change(&self) -> bool {
+    fn geo_data_version(&self) -> String {
         if let Some(geo_config) = &self.geo_config {
             if let Some(lt) = read_file_modified_time(&geo_config.csv_data) {
-                if let Some(st) = *self.code_file_time.lock() {
-                    return lt > st;
-                }
+                return format!("geo-{}", lt);
             }
         }
-        false
+        "".to_string()
     }
 }

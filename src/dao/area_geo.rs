@@ -1,11 +1,6 @@
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
-
 use crate::{AreaError, AreaResult};
 use geo::coordinate_position::{CoordPos, CoordinatePosition};
-use geo::{
-    coord, Centroid, Coord, GeodesicDistance, LineString, MinimumRotatedRect, Point, Polygon,
-};
+use geo::{coord, BoundingRect, Centroid, Coord, GeodesicDistance, LineString, Point, Polygon};
 use rayon::prelude::*;
 // 初始化
 
@@ -13,54 +8,19 @@ use rayon::prelude::*;
 
 // Centroid [省,市,县都预先算一遍],基于中心点构建B*TREE
 
-// MinimumRotatedRect 最小边界框 [县都预先算一遍]
-
 // CoordPos, CoordinatePosition 坐标是否在某区域检测
 
-#[derive(Debug)]
-struct AreaGeoSearchAreaIndex {
-    rect: Polygon,
+#[derive(Debug, Clone)]
+pub struct AreaGeoIndexInfo {
     detail: Polygon,
 }
 
-#[derive(Debug)]
-struct AreaGeoSearchDataIndex {
-    center: Point,
-    area: AreaGeoSearchAreaIndex,
-}
-#[derive(Debug)]
-struct AreaGeoSearchItemIndex {
-    code: String,
-    search_data: Vec<AreaGeoSearchDataIndex>,
-}
-
-#[derive(Debug)]
-struct AreaGeoQueueItem<'t> {
-    distance: u64,
-    code: &'t str,
-    search_data: &'t AreaGeoSearchAreaIndex,
-}
-impl<'t> PartialEq for AreaGeoQueueItem<'t> {
-    fn eq(&self, other: &Self) -> bool {
-        self.code == other.code
+impl AreaGeoIndexInfo {
+    pub fn new(exterior: LineString, interiors: Vec<LineString>) -> Self {
+        AreaGeoIndexInfo {
+            detail: Polygon::new(exterior, interiors),
+        }
     }
-}
-impl<'t> Eq for AreaGeoQueueItem<'t> {}
-impl<'t> Ord for AreaGeoQueueItem<'t> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        other.distance.cmp(&self.distance)
-    }
-}
-
-impl<'t> PartialOrd for AreaGeoQueueItem<'t> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(other.distance.cmp(&self.distance))
-    }
-}
-
-pub struct AreaGeo {
-    all_geo: Vec<AreaGeoSearchAreaIndex>,
-    search_geo: Vec<AreaGeoSearchItemIndex>,
 }
 
 pub struct AreaGeoDataItem {
@@ -72,13 +32,38 @@ pub struct AreaGeoData {
     pub item: Vec<AreaGeoDataItem>,
 }
 
-impl AreaGeo {
-    pub fn new(area_geo_data: &[AreaGeoData]) -> Self {
-        let mut all_geo = Vec::with_capacity(area_geo_data.len());
-        let mut search_geo = Vec::with_capacity(area_geo_data.len());
-        for tmp_area in area_geo_data {
-            let mut items = vec![];
+pub trait AreaGeoProvider {
+    fn clear(&mut self) -> AreaResult<()>;
+    fn save(&mut self, version: &str) -> AreaResult<()>;
+    fn add_center_data(&mut self, i: u64, center: &str, geo: Point) -> AreaResult<()>;
+    //返回所有权数据，如果返回引用，否则返回的数据当非内存数据时会麻烦的很
+    fn get_center_data(&self) -> AreaResult<Vec<(u64, String, Point)>>;
+    fn set_polygon_data(
+        &mut self,
+        i: u64,
+        exterior: LineString,
+        interiors: Vec<LineString>,
+    ) -> AreaResult<()>;
+    fn get_polygon_data(&self, i: &u64) -> Option<AreaGeoIndexInfo>;
+    fn version(&self) -> String;
+}
 
+pub struct AreaGeo<AP: AreaGeoProvider> {
+    geo_data: AP,
+    max_distance: u64,
+}
+
+impl<AP: AreaGeoProvider> AreaGeo<AP> {
+    pub fn new(geo_data: AP) -> Self {
+        Self {
+            geo_data,
+            max_distance: 0,
+        }
+    }
+    pub fn load_data(&mut self, area_geo_data: Vec<AreaGeoData>, version: &str) -> AreaResult<()> {
+        self.geo_data.clear()?;
+        let mut i = 0;
+        for tmp_area in area_geo_data {
             for tmp_item in tmp_area.item.iter() {
                 let ps = tmp_item.polygon.split(',').collect::<Vec<_>>();
                 let mut cs = Vec::with_capacity(ps.len());
@@ -95,13 +80,18 @@ impl AreaGeo {
                 if cs.is_empty() {
                     continue;
                 }
-                let detail = Polygon::new(cs.into_iter().collect::<LineString<f64>>(), vec![]);
-                let rect = match MinimumRotatedRect::minimum_rotated_rect(&detail) {
-                    Some(dat) => dat,
-                    None => {
-                        continue;
+                let mut exterior = cs.into_iter().collect::<LineString<f64>>();
+                exterior.close();
+                let detail = Polygon::new(exterior.clone(), vec![]);
+
+                if let Some(rc_tmp) = detail.bounding_rect() {
+                    let top_left = std::convert::Into::<Point>::into(rc_tmp.min());
+                    let bottom_right = std::convert::Into::<Point>::into(rc_tmp.max());
+                    let longest_distance = top_left.geodesic_distance(&bottom_right);
+                    if longest_distance > 0.0 && self.max_distance < longest_distance as u64 {
+                        self.max_distance = longest_distance as u64;
                     }
-                };
+                }
 
                 let mut iter = tmp_item.center.split_whitespace();
                 let center = if let (Some(x), Some(y)) = (iter.next(), iter.next()) {
@@ -126,71 +116,41 @@ impl AreaGeo {
                     Some(e) => e,
                     None => continue,
                 };
-                items.push(AreaGeoSearchDataIndex {
-                    center,
-                    area: AreaGeoSearchAreaIndex {
-                        rect,
-                        detail: detail.clone(),
-                    },
-                });
+                self.geo_data.add_center_data(i, &tmp_area.code, center)?;
+                self.geo_data.set_polygon_data(i, exterior, vec![])?;
+
+                i += 1;
             }
-            if tmp_area.code == "0" || tmp_area.code.is_empty() {
-                all_geo = items.into_iter().map(|e| e.area).collect::<Vec<_>>();
-                continue;
-            }
-            search_geo.push(AreaGeoSearchItemIndex {
-                code: tmp_area.code.to_owned(),
-                search_data: items,
-            });
         }
-        Self {
-            search_geo,
-            all_geo,
+        // println!("{}", self.max_distance);
+        if self.max_distance == 0 {
+            self.max_distance = 5500000;
         }
+        self.geo_data.save(version)?;
+        Ok(())
     }
     /// 通过坐标获取可能区域
-    pub fn search(&self, coord: &Coord) -> AreaResult<&str> {
-        if !self.all_geo.is_empty()
-            && !self.all_geo.iter().any(|e| {
-                if e.rect.coordinate_position(coord) == CoordPos::Inside {
-                    return e.detail.coordinate_position(coord) == CoordPos::Inside;
-                }
-                false
-            })
-        {
-            return Err(AreaError::NotFind(format!(
-                "not china geo :{},{}",
-                coord.x, coord.y
-            )));
-        }
+    pub fn search(&self, coord: &Coord) -> AreaResult<String> {
         let point = std::convert::Into::<Point>::into(coord.to_owned());
-        let num_cpus = num_cpus::get();
-        let result = self
-            .search_geo
-            .par_chunks(self.search_geo.len() / num_cpus)
-            .map(|tcs| {
-                let mut out = Vec::with_capacity(tcs.len());
-                for tc in tcs {
-                    for tci in tc.search_data.iter() {
-                        let distance = tci.center.geodesic_distance(&point).round() as u64;
-                        if distance > 5000000 {
-                            continue;
-                        }
-                        out.push(AreaGeoQueueItem {
-                            distance,
-                            search_data: &tci.area,
-                            code: &tc.code,
-                        })
-                    }
+        let get_data = self.geo_data.get_center_data()?;
+        let max_distance = self.max_distance;
+        let mut dit_data = get_data
+            .par_iter()
+            .flat_map(|(i, code, center)| {
+                let distance = center.geodesic_distance(&point).round() as u64;
+                if distance > max_distance {
+                    return None;
                 }
-                out
+                Some((*i, code.to_owned(), distance))
             })
-            .flat_map(|e| e)
             .collect::<Vec<_>>();
-        let mut heap: BinaryHeap<AreaGeoQueueItem<'_>> = BinaryHeap::from(result);
-        while let Some(max) = heap.pop() {
-            if max.search_data.rect.coordinate_position(coord) == CoordPos::Inside {
-                return Ok(max.code);
+        dit_data.sort_by_key(|&(_, _, dit)| dit);
+        dit_data.truncate(20);
+        for (i, code, _) in dit_data {
+            if let Some(ply_data) = self.geo_data.get_polygon_data(&i) {
+                if ply_data.detail.coordinate_position(coord) == CoordPos::Inside {
+                    return Ok(code);
+                }
             }
         }
         Err(AreaError::NotFind(format!(

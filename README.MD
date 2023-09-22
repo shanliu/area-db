@@ -44,7 +44,9 @@ let data = area_db::CsvAreaData::new(
     area_db::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
     Some(area_db::CsvAreaGeoData::from_inner_path(geo_path, true).unwrap()),
 );
-let area = area_db::AreaDao::new(data).unwrap();
+let area = area_db::AreaDao::from_csv_mem(data, AreaStoreMemory::default()).unwrap();
+//使用文件索引，减少内存使用
+// let area = area_db::AreaDao::from_csv_disk(data, AreaStoreDisk::new(PathBuf::from("./tmp"), None)).unwrap();
 ```
 
 2. 请先下载sqlite数据到你的项目 [内置的包含5级行政区域跟坐标的sqlite数据](data/area-data-sqlite.7z) `解压后使用` 
@@ -61,13 +63,15 @@ area-db = { version = "~0.0.*", default-features=false,features=["data-sqlite-so
 ```
 
 ```rust
-let area = area_db::AreaDao::new(mysql).unwrap();
 let conn = "data/area-data.db";
 let sqlite = area_db::SqliteAreaData::new(
     area_db::SqliteAreaCodeData::from_path(PathBuf::from(&conn)),
     Some(area_db::SqliteAreaGeoData::from_path(PathBuf::from(&conn))),
 );
-let area = area_db::AreaDao::new(sqlite).unwrap();
+
+let area = area_db::AreaDao::from_sqlite_mem(sqlite, AreaStoreMemory::default()).unwrap();
+//使用文件索引，减少内存使用
+// let area = area_db::AreaDao::from_sqlite_disk(sqlite, AreaStoreDisk::new(PathBuf::from("./tmp"), None)).unwrap();
 ```
 
 3. 使用mysql作为数据来源：[表定义](data/mysql-table.sql) 数据可以把以上的csv数据导入进去
@@ -85,13 +89,15 @@ let mysql = area_db::MysqlAreaData::new(
     area_db::MysqlAreaCodeData::from_uri(pool),
     Some(area_db::MysqlAreaGeoData::from_uri(pool)),
 );
-let area = area_db::AreaDao::new(mysql).unwrap();
+let area = area_db::AreaDao::from_mysql_mem(mysql, AreaStoreMemory::default()).unwrap();
+//使用文件索引，减少内存使用
+// let area = area_db::AreaDao::from_mysql_disk(mysql, AreaStoreDisk::new(PathBuf::from("./tmp"), None)).unwrap();
 ```
 
 4. 数据更新时重新加载数据
 
 ```rust
-let area = area_db::AreaDao::new(...).unwrap();
+let area = area_db::AreaDao::from_*(...).unwrap();
 area.geo_reload().unwrap();//重新加载GEO数据
 area.code_reload().unwrap();//重新加载CODE数据
 ```

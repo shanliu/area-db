@@ -1,6 +1,9 @@
 use mysql::{prelude::Queryable, Conn, Opts, Row};
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{AreaCodeData, AreaDataProvider, AreaError, AreaGeoData, AreaGeoDataItem, AreaResult};
+
+use super::utils::en_name_keyword;
 
 impl From<mysql::Error> for AreaError {
     fn from(err: mysql::Error) -> Self {
@@ -19,20 +22,23 @@ pub struct MysqlAreaCodeData {
     pub column_name: String,
     pub column_code: String,
     pub column_hide: String,
-    pub column_key_word: String,
-    pub key_word_name: bool,
+    pub column_keyword: String, //关键字字段
+    pub column_enname: String,  //英文名字段
 }
 
 impl MysqlAreaCodeData {
-    pub fn from_uri(uri: &str) -> Self {
+    pub fn from_uri(uri: &str, table_name: Option<&str>) -> Self {
         Self {
             uri: uri.to_owned(),
-            sql: "select name,code,hide,key_word from area_code".to_string(),
+            sql: format!(
+                "select name,code,hide,kw_name,kw_py from {}",
+                table_name.unwrap_or("area_code")
+            ),
             column_name: "name".to_string(),
             column_code: "code".to_string(),
             column_hide: "hide".to_string(),
-            column_key_word: "key_word".to_string(),
-            key_word_name: true,
+            column_keyword: "kw_name".to_string(),
+            column_enname: "kw_py".to_string(),
         }
     }
 }
@@ -46,12 +52,15 @@ pub struct MysqlAreaGeoData {
 }
 
 impl MysqlAreaGeoData {
-    pub fn from_uri(uri: &str) -> Self {
+    pub fn from_uri(uri: &str, table_name: Option<&str>) -> Self {
         Self {
-            uri:uri.to_owned(),
-            sql: "select code,center,polygon from area_geo where code in ('0') or code like '______%'".to_string(),
-            column_code: "code".to_string(),
-            column_center: "center".to_string(),
+            uri: uri.to_owned(),
+            sql: format!(
+                "select id,geo,polygon from {} where id like '______%'",
+                table_name.unwrap_or("area_geo")
+            ),
+            column_code: "id".to_string(),
+            column_center: "geo".to_string(),
             column_polygon: "polygon".to_string(),
         }
     }
@@ -71,7 +80,7 @@ impl MysqlAreaData {
 }
 
 impl AreaDataProvider for MysqlAreaData {
-    fn read_code_data(&self) -> AreaResult<Vec<AreaCodeData>> {
+    fn code_data(&self) -> AreaResult<Vec<AreaCodeData>> {
         let opt = Opts::try_from(self.code_config.uri.as_str())?;
         let mut conn = Conn::new(opt)?;
         let result: Vec<Row> = conn.query(self.code_config.sql.as_str())?;
@@ -81,24 +90,28 @@ impl AreaDataProvider for MysqlAreaData {
                 if let Some(code) = row.get(self.code_config.column_code.as_str()) {
                     let hide = row.get(self.code_config.column_hide.as_str()).unwrap_or(0);
                     let name: Option<String> = row.get(self.code_config.column_name.as_str());
-                    let keyword: String = row
-                        .get(self.code_config.column_key_word.as_str())
+                    let mut key_word = "".to_string();
+
+                    let word: String = row
+                        .get(self.code_config.column_keyword.as_str())
                         .unwrap_or_default();
-                    let mut key_word = keyword
-                        .split(',')
-                        .filter(|e| !e.is_empty())
-                        .map(|e| e.to_owned())
-                        .collect::<Vec<_>>();
-                    if self.code_config.key_word_name {
-                        if let Some(ename) = &name {
-                            key_word.push(ename.to_owned());
-                        }
+                    if !word.is_empty() {
+                        key_word = word.unicode_words().collect::<Vec<&str>>().join(" ");
+                    }
+                    let mut en_key_word = "".to_string();
+                    let en_name: String = row
+                        .get(self.code_config.column_enname.as_str())
+                        .unwrap_or_default();
+                    if !en_name.is_empty() {
+                        en_key_word = en_name.to_lowercase()
+                            + " "
+                            + en_name_keyword(en_name.as_str()).as_str();
                     }
                     Some(AreaCodeData {
                         code,
                         hide: hide == 1 || name.as_ref().map(|e| e.is_empty()).unwrap_or(true),
                         name: name.unwrap_or_else(|| "[_._]".to_string()),
-                        key_word,
+                        key_word: key_word + " " + en_key_word.as_str(),
                     })
                 } else {
                     None
@@ -106,7 +119,7 @@ impl AreaDataProvider for MysqlAreaData {
             })
             .collect::<Vec<_>>())
     }
-    fn read_geo_data(&self) -> AreaResult<Vec<AreaGeoData>> {
+    fn geo_data(&self) -> AreaResult<Vec<AreaGeoData>> {
         match &self.geo_config {
             Some(get_config) => {
                 let opt = Opts::try_from(get_config.uri.as_str())?;
@@ -135,10 +148,10 @@ impl AreaDataProvider for MysqlAreaData {
             None => Ok(vec![]),
         }
     }
-    fn code_data_is_change(&self) -> bool {
-        true
+    fn code_data_version(&self) -> String {
+        "".to_string()
     }
-    fn geo_data_is_change(&self) -> bool {
-        true
+    fn geo_data_version(&self) -> String {
+        "".to_string()
     }
 }

@@ -1,15 +1,84 @@
 mod area_data;
+mod utils;
 pub use area_data::*;
 mod area_code;
+mod area_store;
 pub use area_code::*;
+pub use area_store::*;
 mod area_geo;
 pub use area_geo::*;
-use parking_lot::RwLock;
+use tantivy::{directory::error::OpenDirectoryError, query::QueryParserError, TantivyError};
+mod area;
+pub use area::*;
+use std::fmt::{Display, Formatter};
+pub enum AreaDao {
+    #[cfg(feature = "data-csv")]
+    CsvMem(Area<AreaStoreMemory, CsvAreaData>),
+    #[cfg(feature = "data-sqlite")]
+    SqliteMem(Area<AreaStoreMemory, SqliteAreaData>),
+    #[cfg(feature = "data-mysql")]
+    MysqlMem(Area<AreaStoreMemory, MysqlAreaData>),
+    #[cfg(all(feature = "data-csv", feature = "index-disk"))]
+    CsvDisk(Area<AreaStoreDisk, CsvAreaData>),
+    #[cfg(all(feature = "data-sqlite", feature = "index-disk"))]
+    SqliteDisk(Area<AreaStoreDisk, SqliteAreaData>),
+    #[cfg(all(feature = "data-mysql", feature = "index-disk"))]
+    MysqlDisk(Area<AreaStoreDisk, MysqlAreaData>),
+}
+macro_rules! proxy_method {
+    ($method:ident,[$($arg:ident:$arg_type:ty),*],$ret:ty) => {
+        pub fn $method(&self, $($arg:$arg_type),*) -> $ret {
+            match self {
+                #[cfg(feature = "data-csv")]
+                AreaDao::CsvMem(tmp) => tmp.$method($($arg),*),
+                #[cfg(feature = "data-sqlite")]
+                AreaDao::SqliteMem(tmp) => tmp.$method($($arg),*),
+                #[cfg(feature = "data-mysql")]
+                AreaDao::MysqlMem(tmp) => tmp.$method($($arg),*),
+                #[cfg(all(feature = "data-csv", feature = "index-disk"))]
+                AreaDao::CsvDisk(tmp) => tmp.$method($($arg),*),
+                #[cfg(all(feature = "data-sqlite", feature = "index-disk"))]
+                AreaDao::SqliteDisk(tmp) => tmp.$method($($arg),*),
+                #[cfg(all(feature = "data-mysql", feature = "index-disk"))]
+                AreaDao::MysqlDisk(tmp) => tmp.$method($($arg),*),
+            }
+        }
+    };
+}
 
-use std::{
-    error::Error,
-    fmt::{Display, Formatter},
-};
+impl AreaDao {
+    #[cfg(feature = "data-mysql")]
+    pub fn from_mysql_mem(data: MysqlAreaData, store: AreaStoreMemory) -> AreaResult<Self> {
+        Ok(Self::MysqlMem(Area::new(store, data)?))
+    }
+    #[cfg(feature = "data-sqlite")]
+    pub fn from_sqlite_mem(data: SqliteAreaData, store: AreaStoreMemory) -> AreaResult<Self> {
+        Ok(Self::SqliteMem(Area::new(store, data)?))
+    }
+    #[cfg(feature = "data-csv")]
+    pub fn from_csv_mem(data: CsvAreaData, store: AreaStoreMemory) -> AreaResult<Self> {
+        Ok(Self::CsvMem(Area::new(store, data)?))
+    }
+    #[cfg(all(feature = "data-mysql", feature = "index-disk"))]
+    pub fn from_mysql_disk(data: MysqlAreaData, store: AreaStoreDisk) -> AreaResult<Self> {
+        Ok(Self::MysqlDisk(Area::new(store, data)?))
+    }
+    #[cfg(all(feature = "data-sqlite", feature = "index-disk"))]
+    pub fn from_sqlite_disk(data: SqliteAreaData, store: AreaStoreDisk) -> AreaResult<Self> {
+        Ok(Self::SqliteDisk(Area::new(store, data)?))
+    }
+    #[cfg(all(feature = "data-csv", feature = "index-disk"))]
+    pub fn from_csv_disk(data: CsvAreaData, store: AreaStoreDisk) -> AreaResult<Self> {
+        Ok(Self::CsvDisk(Area::new(store, data)?))
+    }
+    proxy_method!(code_find, [code:&str],AreaResult<Vec<AreaCodeItem>>);
+    proxy_method!(code_related, [code:&str],AreaResult<Vec<Vec<AreaCodeRelatedItem>>>);
+    proxy_method!(code_childs, [code:&str],AreaResult<Vec<AreaCodeItem>>);
+    proxy_method!(code_search, [name: &str, limit: usize],AreaResult<Vec<AreaSearchItem>>);
+    proxy_method!(geo_search, [ lat: f64, lng: f64],AreaResult<Vec<AreaCodeItem>>);
+    proxy_method!(geo_reload, [], AreaResult<()>);
+    proxy_method!(code_reload, [], AreaResult<()>);
+}
 
 //公共结构定义
 #[derive(Debug)]
@@ -17,101 +86,31 @@ pub enum AreaError {
     DB(String),
     System(String),
     NotFind(String),
+    Tantivy(String),
+    Store(String),
 }
 impl Display for AreaError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
 }
-impl Error for AreaError {}
+impl From<TantivyError> for AreaError {
+    fn from(err: TantivyError) -> Self {
+        AreaError::Tantivy(err.to_string())
+    }
+}
+impl From<QueryParserError> for AreaError {
+    fn from(err: QueryParserError) -> Self {
+        AreaError::Tantivy(err.to_string())
+    }
+}
+impl From<OpenDirectoryError> for AreaError {
+    fn from(err: OpenDirectoryError) -> Self {
+        AreaError::Tantivy(err.to_string())
+    }
+}
+
 pub type AreaResult<T> = Result<T, AreaError>;
-
-pub trait AreaDataProvider {
-    fn read_code_data(&self) -> AreaResult<Vec<AreaCodeData>>;
-    fn code_data_is_change(&self) -> bool;
-    fn read_geo_data(&self) -> AreaResult<Vec<AreaGeoData>>;
-    fn geo_data_is_change(&self) -> bool;
-}
-
-pub struct AreaDao {
-    provider: Box<dyn AreaDataProvider + 'static + Sync + Send>,
-    code: RwLock<AreaCode>,
-    geo: RwLock<AreaGeo>,
-}
-
-impl AreaDao {
-    pub fn new(provider: impl AreaDataProvider + 'static + Sync + Send) -> AreaResult<Self> {
-        let tmp = provider.read_code_data()?;
-        let code = AreaCode::new(&tmp);
-        drop(tmp);
-        let tmp = provider.read_geo_data()?;
-        let geo = AreaGeo::new(&tmp);
-        drop(tmp);
-        Ok(Self {
-            provider: Box::new(provider),
-            code: RwLock::new(code),
-            geo: RwLock::new(geo),
-        })
-    }
-    pub fn code_reload(&self) -> AreaResult<()> {
-        if self.provider.code_data_is_change() {
-            let tmp = self.provider.read_code_data()?;
-            let code = AreaCode::new(&tmp);
-            drop(tmp);
-            *self.code.write() = code;
-        }
-        Ok(())
-    }
-    pub fn geo_reload(&self) -> AreaResult<()> {
-        if self.provider.geo_data_is_change() {
-            let tmp = self.provider.read_geo_data()?;
-            let geo = AreaGeo::new(&tmp);
-            drop(tmp);
-            *self.geo.write() = geo;
-        }
-        Ok(())
-    }
-    pub fn code_childs(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {
-        self.code.read().childs(code).map(|mut e| {
-            e.sort_by(|a, b| a.code.cmp(&b.code));
-            e
-        })
-    }
-    pub fn code_find(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {
-        self.code.read().find(code)
-    }
-    pub fn code_related(&self, code: &str) -> AreaResult<Vec<Vec<AreaCodeRelatedItem>>> {
-        self.code.read().related(code).map(|e| {
-            e.into_iter()
-                .map(|mut ie| {
-                    ie.sort_by(|a, b| a.item.code.cmp(&b.item.code));
-                    ie
-                })
-                .collect::<Vec<_>>()
-        })
-    }
-    pub fn code_search(&self, name: &str, limit: usize) -> AreaResult<Vec<AreaSearchItem>> {
-        if name.trim().is_empty() {
-            let mut out = Vec::with_capacity(limit);
-            while let Ok(tmp) = self.code.read().childs("") {
-                out.push(AreaSearchItem {
-                    item: tmp,
-                    key_word: "".to_string(),
-                })
-            }
-            return Ok(out);
-        }
-        self.code.read().search(name, limit)
-    }
-    pub fn geo_search(&self, lat: f64, lng: f64) -> AreaResult<Vec<AreaCodeItem>> {
-        if !(0.0..=90.0).contains(&lat) || !(0.0..=180.0).contains(&lng) {
-            return Ok(vec![]);
-        }
-        let tmp = self.geo.read();
-        let code = tmp.search(&geo::coord! { x:lng, y:lat})?;
-        self.code.read().find(code)
-    }
-}
 
 #[cfg(feature = "data-csv")]
 #[test]
@@ -131,7 +130,7 @@ fn test_code() {
         crate::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
         geo_data,
     );
-    let area = crate::AreaDao::new(data).unwrap();
+    let area = crate::AreaDao::from_csv_mem(data, AreaStoreMemory::default()).unwrap();
     let res = area.code_find("4414").unwrap();
     assert_eq!(res[1].code, "4414");
     let res = area.code_childs("").unwrap();

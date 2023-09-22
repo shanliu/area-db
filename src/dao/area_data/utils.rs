@@ -32,3 +32,21 @@ pub(crate) fn de_gz_data(zip_data: Vec<u8>) -> AreaResult<Vec<u8>> {
         .map_err(|e| AreaError::System(e.to_string()))?;
     Ok(s)
 }
+pub(crate) fn en_name_keyword(input: &str) -> String {
+    let mut result = String::new();
+    let mut prev_char = ' ';
+
+    for c in input.chars() {
+        if c.is_uppercase() {
+            if !prev_char.is_whitespace() {
+                result.push(' ');
+            }
+            result.push(c.to_ascii_lowercase());
+        } else {
+            result.push(c);
+        }
+        prev_char = c;
+    }
+
+    result
+}
