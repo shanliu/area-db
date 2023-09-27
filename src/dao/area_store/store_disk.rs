@@ -880,7 +880,7 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
             unsafe {
                 let offset = i * polygon_item_size + mmap_center_size + info_len;
                 if i == 1156 {
-                    println!("{}{}", exc_len, iner_len);
+                    //  println!("{}{}", exc_len, iner_len);
                 }
                 std::ptr::copy_nonoverlapping(tmp, ptr.add(offset), tmp_size);
 
