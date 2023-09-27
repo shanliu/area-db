@@ -327,9 +327,9 @@ fn mmap_find_code_tree(mmap: &Mmap, index: usize) -> AreaResult<(String, Vec<Str
         let key_tmp = String::from_utf8_lossy(&mmap[key_start..key_start + key_end]).to_string();
         let mut val_tmp = Vec::with_capacity(tmp.1);
         if tmp.1 > 0 {
-            for val_i in 0..=tmp.1 - 1 {
+            for val_i in 0..tmp.1 {
                 let val_start =
-                    index * item_len + info_len + prefix + max_key_length + val_i * tmp.2;
+                    index * item_len + info_len + prefix + max_key_length + val_i * max_tree_length;
                 let val_end = tmp.2;
                 let sub_val =
                     String::from_utf8_lossy(&mmap[val_start..val_start + val_end]).to_string();
@@ -492,7 +492,7 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
                 max_tree_length = max_str_len;
             }
             let index = key.parse::<u64>().unwrap_or(0);
-            vec_data.push((index, key, value, max_tree_count, max_tree_length));
+            vec_data.push((index, key, value, max_str_len));
         }
         vec_data.sort_by(|a, b| a.0.cmp(&b.0));
         let index_data = vec_data.iter().map(|e| e.0).collect::<Vec<u64>>();
@@ -533,12 +533,10 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
             }
         }
 
-        for (i, (_, key, value, max_tree_count, max_tree_length)) in
-            vec_data.into_iter().enumerate()
-        {
+        for (i, (_, key, value, sub_value_max_length)) in vec_data.into_iter().enumerate() {
             //key_length,sub-code-count,sub-code-len,
-            let tmp = &(key.len(), max_tree_count, max_tree_length) as *const AreaCodeTreeItemPrefix
-                as *const u8;
+            let tmp = &(key.len(), value.len(), sub_value_max_length)
+                as *const AreaCodeTreeItemPrefix as *const u8;
             let ptr = mmap.as_mut_ptr();
             unsafe {
                 std::ptr::copy_nonoverlapping(tmp, ptr.add(i * item_len + info_len), prefix);
@@ -549,6 +547,9 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
                     key.len(),
                 );
                 for (i_val, tmp_val) in value.iter().enumerate() {
+                    // if tmp_val.starts_with("441403") {
+                    //     println!("{}", tmp_val);
+                    // }
                     //理论上code等长
                     let val_start =
                         i * item_len + info_len + prefix + max_key_length + i_val * max_tree_length;
@@ -727,7 +728,7 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
             let (wlen_tmp, ilen_tmp): (usize, usize) = ptr.read();
             let mut wout = Vec::with_capacity(wlen_tmp);
             if wlen_tmp > 0 {
-                for sub_i in 0..=ilen_tmp - 1 {
+                for sub_i in 0..ilen_tmp {
                     let tmp_ptr = mmap[info_all_len
                         + index * item_len
                         + polygon_prefix
@@ -743,7 +744,7 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
                 info_all_len + index * item_len + polygon_prefix + polygon_geo_size * wlen_tmp;
             let mut iline_str_vec = Vec::with_capacity(ilen_tmp);
             if ilen_tmp > 0 {
-                for sub_i in 0..=ilen_tmp - 1 {
+                for sub_i in 0..ilen_tmp {
                     let ptr = mmap[info_all_len
                         + index * item_len
                         + polygon_tmp_prefix
@@ -751,7 +752,7 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
                         .as_ptr() as *const usize;
                     let ilen = ptr.read();
                     let mut iline_str = Vec::with_capacity(ilen);
-                    for sub_ii in 0..=ilen - 1 {
+                    for sub_ii in 0..ilen {
                         let tmp_ptr = mmap[iline_start + sub_ii * polygon_geo_size..].as_ptr()
                             as *const (f64, f64);
                         let tmp_data = tmp_ptr.read();
