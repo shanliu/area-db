@@ -538,11 +538,6 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
                 as *const u8;
             let ptr = mmap.as_mut_ptr();
             unsafe {
-                // println!(
-                //     "{:?},{}",
-                //     (index, key.len(), max_tree_count, max_tree_length),
-                //     i * item_len + info_len
-                // );
                 std::ptr::copy_nonoverlapping(tmp, ptr.add(i * item_len + info_len), prefix);
                 let key_start = i * item_len + info_len + prefix;
                 std::ptr::copy_nonoverlapping(
