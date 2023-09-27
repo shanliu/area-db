@@ -458,7 +458,7 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
                 tmp.into_iter()
                     .map(|t| {
                         let next = mmap_code_tree_childs(&self.index, mmap, &t)
-                            .map(|tt| tt.is_empty())
+                            .map(|tt| !tt.is_empty())
                             .unwrap_or(true);
                         (t, next)
                     })
