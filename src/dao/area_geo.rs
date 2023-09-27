@@ -35,16 +35,16 @@ pub struct AreaGeoData {
 pub trait AreaGeoProvider {
     fn clear(&mut self) -> AreaResult<()>;
     fn save(&mut self, version: &str) -> AreaResult<()>;
-    fn add_center_data(&mut self, i: u64, center: &str, geo: Point) -> AreaResult<()>;
-    //返回所有权数据，如果返回引用，否则返回的数据当非内存数据时会麻烦的很
-    fn get_center_data(&self) -> AreaResult<Vec<(u64, String, Point)>>;
-    fn set_polygon_data(
+    fn push_data(
         &mut self,
-        i: u64,
+        code: &str,
+        center_geo: Point,
         exterior: LineString,
         interiors: Vec<LineString>,
     ) -> AreaResult<()>;
-    fn get_polygon_data(&self, i: &u64) -> Option<AreaGeoIndexInfo>;
+    //返回所有权数据，如果返回引用，否则返回的数据当非内存数据时会麻烦的很
+    fn get_center_data(&self) -> AreaResult<Vec<(usize, String, Point)>>;
+    fn get_polygon_data(&self, i: &usize) -> Option<AreaGeoIndexInfo>;
     fn version(&self) -> String;
 }
 
@@ -62,7 +62,7 @@ impl<AP: AreaGeoProvider> AreaGeo<AP> {
     }
     pub fn load_data(&mut self, area_geo_data: Vec<AreaGeoData>, version: &str) -> AreaResult<()> {
         self.geo_data.clear()?;
-        let mut i = 0;
+        // let mut i = 0;
         for tmp_area in area_geo_data {
             for tmp_item in tmp_area.item.iter() {
                 let ps = tmp_item.polygon.split(',').collect::<Vec<_>>();
@@ -116,10 +116,8 @@ impl<AP: AreaGeoProvider> AreaGeo<AP> {
                     Some(e) => e,
                     None => continue,
                 };
-                self.geo_data.add_center_data(i, &tmp_area.code, center)?;
-                self.geo_data.set_polygon_data(i, exterior, vec![])?;
-
-                i += 1;
+                self.geo_data
+                    .push_data(&tmp_area.code, center, exterior, vec![])?;
             }
         }
         // println!("{}", self.max_distance);

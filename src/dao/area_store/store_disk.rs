@@ -9,17 +9,18 @@ use crate::{
 };
 use geo::{LineString, Point};
 use memmap2::{Mmap, MmapMut};
-use std::fs::OpenOptions;
+use std::fs::{remove_dir_all, OpenOptions};
 use std::io::{Seek, SeekFrom};
 use tantivy::directory::MmapDirectory;
 use tantivy::{schema::Schema, store::Compressor, Index, IndexBuilder, IndexSettings, IndexWriter};
 
 fn mmap_find_version(mmap: &Mmap, ver_start_index: usize) -> AreaResult<String> {
     let ver_len = std::mem::size_of::<usize>();
+    let start_index = ver_start_index - ver_len;
     let tmp = unsafe {
-        let version_len = mmap[ver_start_index..].as_ptr() as *const usize;
-        let ver_start = ver_start_index + ver_len;
-        let ver_end = ver_start_index + ver_len + version_len.read();
+        let version_len = mmap[start_index..].as_ptr() as *const usize;
+        let ver_start = ver_start_index;
+        let ver_end = ver_start_index + version_len.read();
         String::from_utf8_lossy(&mmap[ver_start..ver_end]).to_string()
     };
     Ok(tmp)
@@ -41,6 +42,7 @@ pub struct AreaCodeIndexDataDisk {
     path: PathBuf,
     mmap: Option<Mmap>,
     hash: HashMap<String, AreaCodeIndexInfo>,
+    index: Vec<u64>,
 }
 
 impl AreaCodeIndexDataDisk {
@@ -49,38 +51,56 @@ impl AreaCodeIndexDataDisk {
             mmap: None,
             path,
             hash: HashMap::new(),
+            index: vec![],
         }
     }
 }
 
-fn mmap_find_code_index_info(
-    mmap: &Mmap,
-    index: usize,
-) -> AreaResult<(u64, String, AreaCodeIndexInfo)> {
-    let info_len = std::mem::size_of::<(usize, usize, usize, usize)>();
-    let prefix = std::mem::size_of::<(u64, bool, usize, usize)>();
+fn index_search<T: Ord>(index: &[T], find: &T) -> (usize, usize, usize) {
+    let find_index = index.binary_search(find).unwrap_or_default();
+    let mut start_index = 0;
+    let mut end_index = find_index;
+    for i in (0..=find_index).rev() {
+        if index[i] < *find {
+            start_index = i;
+            break;
+        }
+    }
+    for (i, tmp) in index.iter().enumerate().skip(find_index) {
+        if *tmp > *find {
+            end_index = i;
+            break;
+        }
+    }
+    (find_index, start_index, end_index)
+}
+
+type AreaCodeInfo = (usize, usize, usize, usize);
+type AreaCodeItemPrefix = (usize, bool, usize);
+fn mmap_find_code_index_info(mmap: &Mmap, index: usize) -> AreaResult<(String, AreaCodeIndexInfo)> {
+    let prefix = std::mem::size_of::<AreaCodeItemPrefix>();
     let (max_len, max_key_length, max_value_length, version_len) = unsafe {
-        let ptr = mmap[0..].as_ptr() as *const (usize, usize, usize, usize);
+        let ptr = mmap[0..].as_ptr() as *const AreaCodeInfo;
         ptr.read()
     };
     mmap_check_index(max_len, index)?;
+    let info_len =
+        std::mem::size_of::<AreaCodeInfo>() + version_len + std::mem::size_of::<u64>() * max_len;
     let item_len = prefix + max_key_length + max_value_length;
     let (tmp, key_tmp, val_tmp) = unsafe {
-        let ptr = mmap[info_len + version_len + index * item_len..].as_ptr()
-            as *const (u64, bool, usize, usize);
-        let tmp: (u64, bool, usize, usize) = ptr.read();
+        let ptr = mmap[info_len + index * item_len..].as_ptr() as *const AreaCodeItemPrefix;
+        let tmp: AreaCodeItemPrefix = ptr.read();
         // println!("{:?}:{}", tmp, index);
         // 读取20字节长度数据
-        let key_start = index * item_len + info_len + version_len + prefix;
-        let key_end = tmp.2;
-        let val_start = index * item_len + info_len + version_len + prefix + max_key_length;
-        let val_end = tmp.3;
+        let key_start = index * item_len + info_len + prefix;
+        let key_end = tmp.0;
+        let val_start = index * item_len + info_len + prefix + max_key_length;
+        let val_end = tmp.2;
         let key_tmp = String::from_utf8_lossy(&mmap[key_start..key_start + key_end]).to_string();
         let val_tmp = String::from_utf8_lossy(&mmap[val_start..val_start + val_end]).to_string();
         (tmp, key_tmp, val_tmp)
     };
     Ok((
-        tmp.0,
         key_tmp,
         AreaCodeIndexInfo {
             hide: tmp.1,
@@ -97,78 +117,82 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
     fn clear(&mut self) -> AreaResult<()> {
         self.hash = HashMap::new();
         self.mmap = None;
+        self.index = vec![];
         Ok(())
     }
     fn get(&self, index: &str) -> Option<AreaCodeIndexInfo> {
         if let Some(mmap) = &self.mmap {
-            let info_len = std::mem::size_of::<(usize, usize, usize, usize)>();
-            let prefix = std::mem::size_of::<(u64, bool, usize, usize)>();
-            let (max_len, max_key_length, max_value_length, version_len) = unsafe {
-                let ptr = mmap[0..].as_ptr() as *const (usize, usize, usize, usize);
+            let max_len = unsafe {
+                let ptr = mmap[0..].as_ptr() as *const usize;
                 ptr.read()
             };
-
             if max_len == 0 {
                 return None;
             }
-
-            let item_len = prefix + max_key_length + max_value_length;
-
             let find_start = index.parse::<u64>().unwrap_or(0);
-            let (start_index, start_code) = if find_start > 0 {
-                //折半查找。。。fix...
-                let mut start = max_len / 2;
+            let (find_index, start_index, end_index) = index_search(&self.index, &find_start);
+            if find_index > 0 {
+                let mut pref_index = find_index;
                 loop {
-                    if start > 0 {
-                        mmap_check_index(max_len, start).ok()?;
-                        let code = unsafe {
-                            let ptr = mmap[info_len + version_len + start * item_len..].as_ptr()
-                                as *const u64;
-                            ptr.read()
-                        };
-                        if code == 0 {
-                            break (0, 0);
-                        }
-                        if code > find_start {
-                            start /= 2;
-                            continue;
-                        } else {
-                            let add_tmp = start / 2;
-                            if add_tmp == 0 {
-                                break (start, code);
-                            }
-                            start += add_tmp;
-                        }
-                    }
-                    break (0, 0);
-                }
-            } else {
-                (0, 0)
-            };
-            if start_index > 0 && start_code == find_start {
-                let mut prev_index = start_index;
-                loop {
-                    let (code, key, val) = mmap_find_code_index_info(mmap, prev_index).ok()?;
+                    let (key, val) = mmap_find_code_index_info(mmap, pref_index).ok()?;
                     if key.as_str() == index {
                         return Some(val);
                     }
-                    if prev_index == 0 || find_start > code {
+                    if pref_index <= start_index {
                         break;
                     }
-                    prev_index -= 1;
+                    pref_index -= 1;
                 }
             }
-            for i in start_index..=max_len - 1 {
-                let (code, key, val) = mmap_find_code_index_info(mmap, i).ok()?;
-                if code > find_start {
-                    break;
-                }
+            for i in find_index..=end_index {
+                let (key, val) = mmap_find_code_index_info(mmap, i).ok()?;
                 if key.as_str() == index {
                     return Some(val);
                 }
             }
         }
         None
+    }
+    fn load(&mut self) -> AreaResult<()> {
+        let mut file = match OpenOptions::new().read(true).open(&self.path) {
+            Ok(file) => file,
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::NotFound => return Ok(()),
+                _ => {
+                    return Err(AreaError::Store(err.to_string()));
+                }
+            },
+        };
+        match file.metadata() {
+            Ok(meta) => {
+                if !meta.is_file() || meta.len() == 0 {
+                    return Ok(());
+                }
+            }
+            Err(err) => {
+                return Err(AreaError::Store(err.to_string()));
+            }
+        }
+        file.seek(SeekFrom::Start(0))?;
+        let mmap = &unsafe { Mmap::map(&file)? };
+        let info_len = std::mem::size_of::<AreaCodeInfo>();
+        let (max_len, _, _, version_len) = unsafe {
+            let ptr = mmap[0..].as_ptr() as *const AreaCodeInfo;
+            ptr.read()
+        };
+        if max_len == 0 {
+            return Ok(());
+        }
+        let mut index_data = Vec::with_capacity(max_len);
+        for i in 0..max_len {
+            unsafe {
+                let ptr =
+                    mmap[info_len + version_len + i * std::mem::size_of::<u64>()] as *const u64;
+                index_data.push(ptr.read());
+            }
+        }
+        self.index = index_data;
+        Ok(())
     }
     fn save(&mut self, version: &str) -> AreaResult<()> {
         let mut file = OpenOptions::new()
@@ -181,6 +205,7 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
         let mut max_value_length = 0;
         let max_len = self.hash.len();
         let mut vec_data = Vec::with_capacity(max_len);
+        self.index = Vec::with_capacity(vec_data.len());
         for (key, value) in self.hash.iter() {
             if key.len() > max_key_length {
                 max_key_length = key.len();
@@ -188,32 +213,42 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
             if value.name.len() > max_value_length {
                 max_value_length = value.name.len();
             }
-            let index = key.parse::<u64>().unwrap_or(0);
-            vec_data.push((index, key, value))
+            vec_data.push((key, value));
+            self.index.push(key.parse::<u64>().unwrap_or(0));
         }
         vec_data.sort_by(|a, b| a.0.cmp(&b.0));
-        //元素数量，最大key长度，最大value长度，版本信息长度+ 版本内容长度
-        let info_len = std::mem::size_of::<(usize, usize, usize, usize)>() + version.len();
-        let prefix = std::mem::size_of::<(u64, bool, usize, usize)>();
+        //元素数量，最大key长度，最大value长度，版本信息长度 + 版本内容长度
+        let info_len = std::mem::size_of::<AreaCodeInfo>()
+            + version.len()
+            + std::mem::size_of::<u64>() * max_len;
+        let prefix = std::mem::size_of::<AreaCodeItemPrefix>();
         let item_len = prefix + max_key_length + max_value_length;
         file.set_len((info_len + item_len * max_len) as u64)?;
         file.seek(SeekFrom::Start(0))?;
         let mut mmap = unsafe { MmapMut::map_mut(&file)? };
         let ptr = mmap.as_mut_ptr();
-        let tmp = &(max_len, max_key_length, max_value_length, version.len())
-            as *const (usize, usize, usize, usize) as *const u8;
+        let tmp = &(max_len, max_key_length, max_value_length, version.len()) as *const AreaCodeInfo
+            as *const u8;
         unsafe {
-            std::ptr::copy_nonoverlapping(tmp, ptr, info_len);
+            std::ptr::copy_nonoverlapping(tmp, ptr, std::mem::size_of::<AreaCodeInfo>());
             std::ptr::copy_nonoverlapping(
                 version.as_bytes().as_ptr(),
-                ptr.add(info_len),
+                ptr.add(std::mem::size_of::<AreaCodeInfo>()),
                 version.len(),
             );
+            for (i, tmp) in self.index.iter().enumerate() {
+                let tlen = std::mem::size_of::<u64>();
+                std::ptr::copy_nonoverlapping(
+                    tmp.to_be_bytes().as_ptr(),
+                    ptr.add(std::mem::size_of::<AreaCodeInfo>() + version.len() + i * tlen),
+                    tlen,
+                );
+            }
         }
 
-        for (i, (index, key, value)) in vec_data.into_iter().enumerate() {
-            let tmp = &(index, value.hide, key.len(), value.name.len())
-                as *const (u64, bool, usize, usize) as *const u8;
+        for (i, (key, value)) in vec_data.into_iter().enumerate() {
+            let tmp = &(key.len(), value.hide, value.name.len()) as *const AreaCodeItemPrefix
+                as *const u8;
             let ptr = mmap.as_mut_ptr();
             unsafe {
                 std::ptr::copy_nonoverlapping(tmp, ptr.add(i * item_len + info_len), prefix);
@@ -241,10 +276,7 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
     fn version(&self) -> String {
         self.mmap
             .as_ref()
-            .map(|e| {
-                mmap_find_version(e, std::mem::size_of::<(usize, usize, usize)>())
-                    .unwrap_or_default()
-            })
+            .map(|e| mmap_find_version(e, std::mem::size_of::<AreaCodeInfo>()).unwrap_or_default())
             .unwrap_or_default()
     }
 }
@@ -253,6 +285,7 @@ pub struct AreaCodeIndexTreeDisk {
     mmap: Option<Mmap>,
     path: PathBuf,
     data: HashMap<String, Vec<String>>,
+    index: Vec<u64>,
 }
 impl AreaCodeIndexTreeDisk {
     pub fn new(path: PathBuf) -> Self {
@@ -260,97 +293,72 @@ impl AreaCodeIndexTreeDisk {
             mmap: None,
             path,
             data: HashMap::new(),
+            index: vec![],
         }
     }
 }
-
-fn mmap_find_code_tree(mmap: &Mmap, index: usize) -> AreaResult<(u64, String, Vec<String>)> {
-    let info_len = std::mem::size_of::<(usize, usize, usize, usize, usize)>();
-    let prefix = std::mem::size_of::<(u64, usize, usize, usize)>();
+type AreaCodeTreeInfo = (usize, usize, usize, usize, usize);
+type AreaCodeTreeItemPrefix = (usize, usize, usize);
+fn mmap_find_code_tree(mmap: &Mmap, index: usize) -> AreaResult<(String, Vec<String>)> {
+    let prefix = std::mem::size_of::<AreaCodeTreeItemPrefix>();
     let (max_len, max_key_length, max_tree_length, max_tree_count, version_len) = unsafe {
-        let ptr = mmap[0..].as_ptr() as *const (usize, usize, usize, usize, usize);
+        let ptr = mmap[0..].as_ptr() as *const AreaCodeTreeInfo;
         ptr.read()
     };
     mmap_check_index(max_len, index)?;
+    let info_len = std::mem::size_of::<AreaCodeTreeInfo>()
+        + version_len
+        + std::mem::size_of::<u64>() * max_len;
     let item_len = prefix + max_key_length + max_tree_length * max_tree_count;
-    let (tmp, key_tmp, val_tmp) = unsafe {
-        let ptr = mmap[info_len + version_len + index * item_len..].as_ptr()
-            as *const (u64, usize, usize, usize);
+    let (key_tmp, val_tmp) = unsafe {
+        let ptr = mmap[info_len + index * item_len..].as_ptr() as *const AreaCodeTreeItemPrefix;
         // //index,key_length,sub-code-count,sub-code-len,
-        let tmp: (u64, usize, usize, usize) = ptr.read();
+        let tmp: AreaCodeTreeItemPrefix = ptr.read();
         // 读取20字节长度数据
-        let key_start = index * item_len + info_len + version_len + prefix;
-        let key_end = tmp.1;
+        let key_start = index * item_len + info_len + prefix;
+        let key_end = tmp.0;
         let key_tmp = String::from_utf8_lossy(&mmap[key_start..key_start + key_end]).to_string();
-        let mut val_tmp = Vec::with_capacity(tmp.2);
-        if tmp.2 > 0 {
-            for val_i in 0..=tmp.2 - 1 {
-                let val_start = index * item_len
-                    + info_len
-                    + version_len
-                    + prefix
-                    + max_key_length
-                    + val_i * tmp.3;
-                let val_end = tmp.3;
+        let mut val_tmp = Vec::with_capacity(tmp.1);
+        if tmp.1 > 0 {
+            for val_i in 0..=tmp.1 - 1 {
+                let val_start =
+                    index * item_len + info_len + prefix + max_key_length + val_i * tmp.2;
+                let val_end = tmp.2;
                 let sub_val =
                     String::from_utf8_lossy(&mmap[val_start..val_start + val_end]).to_string();
                 val_tmp.push(sub_val);
             }
         }
-        (tmp, key_tmp, val_tmp)
+        (key_tmp, val_tmp)
     };
-    Ok((tmp.0, key_tmp, val_tmp))
+    Ok((key_tmp, val_tmp))
 }
 
-fn mmap_code_tree_childs(mmap: &Mmap, index: &str) -> Option<Vec<(String, bool)>> {
-    let info_len = std::mem::size_of::<(usize, usize, usize, usize, usize)>();
-    let prefix = std::mem::size_of::<(u64, usize, usize, usize)>();
-    let (max_len, max_key_length, max_tree_length, max_tree_count, version_len) = unsafe {
-        let ptr = mmap[0..].as_ptr() as *const (usize, usize, usize, usize, usize);
+fn mmap_code_tree_childs(
+    index_data: &[u64],
+    mmap: &Mmap,
+    index: &str,
+) -> Option<Vec<(String, bool)>> {
+    let max_len = unsafe {
+        let ptr = mmap[0..].as_ptr() as *const usize;
         ptr.read()
     };
-    let item_len = prefix + max_key_length + max_tree_length * max_tree_count;
 
     if max_len == 0 {
         return None;
     }
-
     let find_start = index.parse::<u64>().unwrap_or(0);
-    let (start_index, start_code) = if find_start > 0 {
-        let mut start = max_len / 2;
+    let (find_index, start_index, end_index) = index_search(index_data, &find_start);
 
-        loop {
-            if start > 0 {
-                mmap_check_index(max_len, start).ok()?;
-                let code = unsafe {
-                    let ptr =
-                        mmap[info_len + version_len + start * item_len..].as_ptr() as *const u64;
-                    ptr.read()
-                };
-                if code == 0 {
-                    break (0, 0);
-                }
-                if code > find_start {
-                    start /= 2;
-                    continue;
-                } else {
-                    break (start, code);
-                }
-            }
-            break (0, 0);
-        }
-    } else {
-        (0, 0)
-    };
-    if start_index > 0 && start_code == find_start {
+    if start_index > 0 {
         let mut prev_index = start_index;
         loop {
-            let (code, key, val) = mmap_find_code_tree(mmap, prev_index).ok()?;
+            let (key, val) = mmap_find_code_tree(mmap, prev_index).ok()?;
             if key.as_str() == index {
                 return Some(
                     val.into_iter()
                         .map(|t| {
-                            let next = mmap_code_tree_childs(mmap, &t)
+                            let next = mmap_code_tree_childs(index_data, mmap, &t)
                                 .map(|tt| tt.is_empty())
                                 .unwrap_or(true);
                             (t, next)
@@ -358,22 +366,19 @@ fn mmap_code_tree_childs(mmap: &Mmap, index: &str) -> Option<Vec<(String, bool)>
                         .collect(),
                 );
             }
-            if prev_index == 0 || find_start > code {
+            if prev_index <= start_index {
                 break;
             }
             prev_index -= 1;
         }
     }
-    for i in start_index..=max_len - 1 {
-        let (code, key, val) = mmap_find_code_tree(mmap, i).ok()?;
-        if code > find_start {
-            break;
-        }
+    for i in find_index..=end_index {
+        let (key, val) = mmap_find_code_tree(mmap, i).ok()?;
         if key.as_str() == index {
             return Some(
                 val.into_iter()
                     .map(|t| {
-                        let next = mmap_code_tree_childs(mmap, &t)
+                        let next = mmap_code_tree_childs(index_data, mmap, &t)
                             .map(|tt| tt.is_empty())
                             .unwrap_or(true);
                         (t, next)
@@ -389,6 +394,48 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
     fn clear(&mut self) -> AreaResult<()> {
         self.data = HashMap::new();
         self.mmap = None;
+        self.index = vec![];
+        Ok(())
+    }
+    fn load(&mut self) -> AreaResult<()> {
+        let mut file = match OpenOptions::new().read(true).open(&self.path) {
+            Ok(file) => file,
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::NotFound => return Ok(()),
+                _ => {
+                    return Err(AreaError::Store(err.to_string()));
+                }
+            },
+        };
+        match file.metadata() {
+            Ok(meta) => {
+                if !meta.is_file() || meta.len() == 0 {
+                    return Ok(());
+                }
+            }
+            Err(err) => {
+                return Err(AreaError::Store(err.to_string()));
+            }
+        }
+        file.seek(SeekFrom::Start(0))?;
+        let mmap = &unsafe { Mmap::map(&file)? };
+        let info_len = std::mem::size_of::<AreaCodeTreeInfo>();
+        let (max_len, _, _, _, version_len) = unsafe {
+            let ptr = mmap[0..].as_ptr() as *const AreaCodeTreeInfo;
+            ptr.read()
+        };
+        if max_len == 0 {
+            return Ok(());
+        }
+        let mut index_data = Vec::with_capacity(max_len);
+        for i in 0..max_len {
+            unsafe {
+                let ptr =
+                    mmap[info_len + version_len + i * std::mem::size_of::<u64>()] as *const u64;
+                index_data.push(ptr.read());
+            }
+        }
+        self.index = index_data;
         Ok(())
     }
     fn add(&mut self, code_data: Vec<&str>) -> AreaResult<()> {
@@ -412,7 +459,7 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
     fn childs(&self, code_data: &[&str]) -> Option<Vec<(String, bool)>> {
         let index = code_data.join("");
         if let Some(mmap) = &self.mmap {
-            return mmap_code_tree_childs(mmap, &index);
+            return mmap_code_tree_childs(&self.index, mmap, &index);
         }
         None
     }
@@ -428,6 +475,7 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
         let mut max_tree_count = 0;
         let max_len = self.data.len();
         let mut vec_data = Vec::with_capacity(max_len);
+        self.index = Vec::with_capacity(vec_data.len());
         for (key, value) in self.data.iter() {
             if key.len() > max_key_length {
                 max_key_length = key.len();
@@ -440,15 +488,20 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
                 max_tree_length = max_str_len;
             }
             let index = key.parse::<u64>().unwrap_or(0);
-            vec_data.push((index, key, value, max_tree_count, max_tree_length));
+            vec_data.push((key, value, max_tree_count, max_tree_length));
+            self.index.push(index);
         }
         vec_data.sort_by(|a, b| a.0.cmp(&b.0));
 
-        //max_len,max_key_length,max_tree_length,max_tree_count,version_len
-        let info_len = std::mem::size_of::<(usize, usize, usize, usize, usize)>() + version.len();
         //index,key_length,sub-code-count,sub-code-len,
-        let prefix = std::mem::size_of::<(u64, usize, usize, usize)>();
+        let prefix = std::mem::size_of::<AreaCodeTreeItemPrefix>();
         let item_len = prefix + max_key_length + max_tree_length * max_tree_count;
+
+        //max_len,max_key_length,max_tree_length,max_tree_count,version_len
+        let info_len = std::mem::size_of::<AreaCodeTreeInfo>()
+            + version.len()
+            + std::mem::size_of::<u64>() * max_len;
+
         file.set_len((info_len + item_len * max_len) as u64)?;
         file.seek(SeekFrom::Start(0))?;
         let mut mmap = unsafe { MmapMut::map_mut(&file)? };
@@ -459,22 +512,28 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
             max_tree_length,
             max_tree_count,
             version.len(),
-        ) as *const (usize, usize, usize, usize, usize) as *const u8;
+        ) as *const AreaCodeTreeInfo as *const u8;
         unsafe {
-            std::ptr::copy_nonoverlapping(tmp, ptr, info_len);
+            std::ptr::copy_nonoverlapping(tmp, ptr, std::mem::size_of::<AreaCodeTreeInfo>());
             std::ptr::copy_nonoverlapping(
                 version.as_bytes().as_ptr(),
-                ptr.add(info_len),
+                ptr.add(std::mem::size_of::<AreaCodeTreeInfo>()),
                 version.len(),
             );
+            for (i, tmp) in self.index.iter().enumerate() {
+                let tlen = std::mem::size_of::<u64>();
+                std::ptr::copy_nonoverlapping(
+                    tmp.to_be_bytes().as_ptr(),
+                    ptr.add(std::mem::size_of::<AreaCodeInfo>() + version.len() + i * tlen),
+                    tlen,
+                );
+            }
         }
 
-        for (i, (index, key, value, max_tree_count, max_tree_length)) in
-            vec_data.into_iter().enumerate()
-        {
-            //index,key_length,sub-code-count,sub-code-len,
-            let tmp = &(index, key.len(), max_tree_count, max_tree_length)
-                as *const (u64, usize, usize, usize) as *const u8;
+        for (i, (key, value, max_tree_count, max_tree_length)) in vec_data.into_iter().enumerate() {
+            //key_length,sub-code-count,sub-code-len,
+            let tmp = &(key.len(), max_tree_count, max_tree_length) as *const AreaCodeTreeItemPrefix
+                as *const u8;
             let ptr = mmap.as_mut_ptr();
             unsafe {
                 // println!(
@@ -512,8 +571,7 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
         self.mmap
             .as_ref()
             .map(|e| {
-                mmap_find_version(e, std::mem::size_of::<(usize, usize, usize, usize)>())
-                    .unwrap_or_default()
+                mmap_find_version(e, std::mem::size_of::<AreaCodeTreeInfo>()).unwrap_or_default()
             })
             .unwrap_or_default()
     }
@@ -554,8 +612,7 @@ impl AreaCodeProvider for DiskAreaCodeProvider {
 }
 
 pub struct DiskAreaGeoProvider {
-    center_data: Vec<(u64, String, Point)>,
-    polygon_data: HashMap<u64, (LineString, Vec<LineString>)>,
+    polygon_data: Vec<(String, Point, LineString, Vec<LineString>)>,
     mmap: Option<Mmap>,
     path: PathBuf,
 }
@@ -564,212 +621,148 @@ impl DiskAreaGeoProvider {
         Self {
             mmap: None,
             path,
-            polygon_data: HashMap::new(),
-            center_data: vec![],
+            polygon_data: vec![],
         }
     }
 }
 
-fn mmap_find_polygon_data(mmap: &Mmap, index: usize) -> Option<(u64, AreaGeoIndexInfo)> {
-    let info_len = std::mem::size_of::<(usize, usize, usize, usize, usize, usize)>();
-
-    let (center_max_len, max_center_length, polygon_prefix_len, _, max_polygon_size, version_len) = unsafe {
-        let ptr = mmap[0..].as_ptr() as *const (usize, usize, usize, usize, usize, usize);
-        ptr.read()
-    };
-    if center_max_len == 0 {
-        return None;
-    }
-    let center_prefix = std::mem::size_of::<(u64, usize, f64, f64)>();
-    let mmap_center_size = (center_prefix + max_center_length) * center_max_len;
-    let info_all_len = info_len + version_len + mmap_center_size;
-
-    let polygon_prefix_item = std::mem::size_of::<usize>();
-    let polygon_prefix = std::mem::size_of::<u64>() + polygon_prefix_item * polygon_prefix_len;
-    let polygon_geo_size = std::mem::size_of::<(f64, f64)>();
-    let item_len = polygon_prefix + max_polygon_size * polygon_geo_size;
-
-    let polygon_tmp_prefix = std::mem::size_of::<(u64, usize, usize)>();
-    let (out_index, exterior, interiors) = unsafe {
-        let ptr = mmap[info_all_len + index * item_len..].as_ptr() as *const (u64, usize, usize);
-        // //index,外框元素长度,内框数量
-        let (i, wlen_tmp, ilen_tmp): (u64, usize, usize) = ptr.read();
-        let mut wout = Vec::with_capacity(wlen_tmp);
-        if wlen_tmp > 0 {
-            for sub_i in 0..=ilen_tmp - 1 {
-                let tmp_ptr = mmap
-                    [info_all_len + index * item_len + polygon_prefix + polygon_geo_size * sub_i..]
-                    .as_ptr() as *const (f64, f64);
-                let tmp_data = tmp_ptr.read();
-                wout.push(Point::new(tmp_data.0, tmp_data.1))
-            }
-        }
-        let wline_str = LineString::from(wout);
-
-        let mut iline_start =
-            info_all_len + index * item_len + polygon_prefix + polygon_geo_size * wlen_tmp;
-        let mut iline_str_vec = Vec::with_capacity(ilen_tmp);
-        if ilen_tmp > 0 {
-            for sub_i in 0..=ilen_tmp - 1 {
-                let ptr = mmap[info_all_len
-                    + index * item_len
-                    + polygon_tmp_prefix
-                    + polygon_prefix_item * sub_i..]
-                    .as_ptr() as *const usize;
-                let ilen = ptr.read();
-                let mut iline_str = Vec::with_capacity(ilen);
-                for sub_ii in 0..=ilen - 1 {
-                    let tmp_ptr = mmap[iline_start + sub_ii * polygon_geo_size..].as_ptr()
-                        as *const (f64, f64);
-                    let tmp_data = tmp_ptr.read();
-                    iline_str.push(Point::new(tmp_data.0, tmp_data.1))
-                }
-                iline_str_vec.push(LineString::from(iline_str));
-                iline_start += ilen * polygon_geo_size;
-            }
-        }
-        (i, wline_str, iline_str_vec)
-    };
-
-    Some((out_index, AreaGeoIndexInfo::new(exterior, interiors)))
-}
+type DiskAreaGeoInfo = (usize, usize, usize, usize, usize);
+type DiskAreaGeoCenterPrefix = (usize, f64, f64);
 
 impl AreaGeoProvider for DiskAreaGeoProvider {
     fn clear(&mut self) -> AreaResult<()> {
-        self.center_data = vec![];
-        self.polygon_data = HashMap::new();
+        self.polygon_data = vec![];
         Ok(())
     }
-    fn add_center_data(&mut self, index: u64, center: &str, geo: Point) -> AreaResult<()> {
-        self.center_data.push((index, center.to_string(), geo));
-        Ok(())
-    }
-    fn get_center_data(&self) -> AreaResult<Vec<(u64, String, Point)>> {
+    fn get_center_data(&self) -> AreaResult<Vec<(usize, String, Point)>> {
         let mmap = match self.mmap.as_ref() {
             Some(t) => t,
             None => return Ok(vec![]),
         };
-        let info_len = std::mem::size_of::<(usize, usize, usize, usize, usize, usize)>();
+        let info_len = std::mem::size_of::<DiskAreaGeoInfo>();
 
-        let prefix = std::mem::size_of::<(u64, usize, f64, f64)>();
-
-        let (center_max_len, max_center_length, _, _, _, version_len) = unsafe {
-            let ptr = mmap[0..].as_ptr() as *const (usize, usize, usize, usize, usize, usize);
+        let (
+            max_len,         //元素总量
+            max_code_length, //code 最大长度
+            _,               //最大线数量
+            _,               //坐标总数量
+            version_len,     //版本字符串长度
+        ) = unsafe {
+            let ptr = mmap[0..].as_ptr() as *const DiskAreaGeoInfo;
             ptr.read()
         };
+        let prefix = std::mem::size_of::<DiskAreaGeoCenterPrefix>();
 
-        if center_max_len == 0 {
+        if max_len == 0 {
             return Ok(vec![]);
         }
 
-        let item_len = prefix + max_center_length;
+        let item_len = prefix + max_code_length;
         let out = unsafe {
-            let mut out = Vec::with_capacity(center_max_len);
-            for index in 0..=center_max_len - 1 {
+            let mut out = Vec::with_capacity(max_len);
+            for index in 0..max_len {
                 let ptr = mmap[info_len + version_len + index * item_len..].as_ptr()
-                    as *const (u64, usize, f64, f64);
-                // //index,key_length,sub-code-count,sub-code-len,
-                let tmp: (u64, usize, f64, f64) = ptr.read();
+                    as *const DiskAreaGeoCenterPrefix;
+                // //key_length,sub-code-count,sub-code-len,
+                let tmp: DiskAreaGeoCenterPrefix = ptr.read();
                 // 读取20字节长度数据
                 let key_start = index * item_len + info_len + version_len + prefix;
-                let key_end = tmp.1;
+                let key_end = tmp.0;
                 let key_tmp =
                     String::from_utf8_lossy(&mmap[key_start..key_start + key_end]).to_string();
-                let point = Point::new(tmp.2, tmp.3);
-                out.push((tmp.0, key_tmp, point))
+                let point = Point::new(tmp.1, tmp.2);
+                out.push((index, key_tmp, point))
             }
             out
         };
         Ok(out)
     }
-    fn set_polygon_data(
+    fn push_data(
         &mut self,
-        i: u64,
+        code: &str,
+        center_geo: Point,
         exterior: LineString,
         interiors: Vec<LineString>,
     ) -> AreaResult<()> {
-        self.polygon_data.insert(i, (exterior, interiors));
+        self.polygon_data
+            .push((code.to_string(), center_geo, exterior, interiors));
         Ok(())
     }
-    fn get_polygon_data(&self, index: &u64) -> Option<AreaGeoIndexInfo> {
+    fn get_polygon_data(&self, index: &usize) -> Option<AreaGeoIndexInfo> {
         let mmap = match self.mmap.as_ref() {
             Some(t) => t,
             None => return None,
         };
 
-        let info_len = std::mem::size_of::<(usize, usize, usize, usize, usize, usize)>();
-
+        let info_len = std::mem::size_of::<DiskAreaGeoInfo>();
         let (
-            center_max_len,
-            max_center_length,
-            polygon_prefix_len,
-            max_len,
-            max_polygon_size,
-            version_len,
+            max_len,            //元素总量
+            max_code_length,    //code 最大长度
+            polygon_prefix_len, //最大线数量
+            max_polygon_size,   //坐标总数量
+            version_len,        //版本字符串长度
         ) = unsafe {
-            let ptr = mmap[0..].as_ptr() as *const (usize, usize, usize, usize, usize, usize);
+            let ptr = mmap[0..].as_ptr() as *const DiskAreaGeoInfo;
             ptr.read()
         };
-        if max_len == 0 {
+
+        if max_len == 0 || index + 1 >= max_len {
             return None;
         }
-        let center_prefix = std::mem::size_of::<(u64, usize, f64, f64)>();
-        let mmap_center_size = (center_prefix + max_center_length) * center_max_len;
+        let center_prefix = std::mem::size_of::<DiskAreaGeoCenterPrefix>();
+        let mmap_center_size = (center_prefix + max_code_length) * max_len;
         let info_all_len = info_len + version_len + mmap_center_size;
 
         let polygon_prefix_item = std::mem::size_of::<usize>();
-        let polygon_prefix = std::mem::size_of::<u64>() + polygon_prefix_item * polygon_prefix_len;
+        let polygon_prefix =
+            std::mem::size_of::<usize>() + polygon_prefix_item * polygon_prefix_len;
         let polygon_geo_size = std::mem::size_of::<(f64, f64)>();
         let item_len = polygon_prefix + max_polygon_size * polygon_geo_size;
 
-        let find_start = *index;
-        let (start_index, start_code) = if find_start > 0 {
-            let mut start = max_len / 2;
-            loop {
-                if start > 0 {
-                    mmap_check_index(max_len, start).ok()?;
-                    let code = unsafe {
-                        let ptr = mmap[info_all_len + start * item_len..].as_ptr() as *const u64;
-                        ptr.read()
-                    };
-                    if code == 0 {
-                        break (0, 0);
-                    }
-                    if code > find_start {
-                        start /= 2;
-                        continue;
-                    } else {
-                        break (start, code);
-                    }
+        let polygon_tmp_prefix = std::mem::size_of::<(usize, usize, usize)>();
+        let (exterior, interiors) = unsafe {
+            let ptr = mmap[info_all_len + index * item_len..].as_ptr() as *const (usize, usize);
+            // //index,外框元素长度,内框数量
+            let (wlen_tmp, ilen_tmp): (usize, usize) = ptr.read();
+            let mut wout = Vec::with_capacity(wlen_tmp);
+            if wlen_tmp > 0 {
+                for sub_i in 0..=ilen_tmp - 1 {
+                    let tmp_ptr = mmap[info_all_len
+                        + index * item_len
+                        + polygon_prefix
+                        + polygon_geo_size * sub_i..]
+                        .as_ptr() as *const (f64, f64);
+                    let tmp_data = tmp_ptr.read();
+                    wout.push(Point::new(tmp_data.0, tmp_data.1))
                 }
-                break (0, 0);
             }
-        } else {
-            (0, 0)
+            let wline_str = LineString::from(wout);
+
+            let mut iline_start =
+                info_all_len + index * item_len + polygon_prefix + polygon_geo_size * wlen_tmp;
+            let mut iline_str_vec = Vec::with_capacity(ilen_tmp);
+            if ilen_tmp > 0 {
+                for sub_i in 0..=ilen_tmp - 1 {
+                    let ptr = mmap[info_all_len
+                        + index * item_len
+                        + polygon_tmp_prefix
+                        + polygon_prefix_item * sub_i..]
+                        .as_ptr() as *const usize;
+                    let ilen = ptr.read();
+                    let mut iline_str = Vec::with_capacity(ilen);
+                    for sub_ii in 0..=ilen - 1 {
+                        let tmp_ptr = mmap[iline_start + sub_ii * polygon_geo_size..].as_ptr()
+                            as *const (f64, f64);
+                        let tmp_data = tmp_ptr.read();
+                        iline_str.push(Point::new(tmp_data.0, tmp_data.1))
+                    }
+                    iline_str_vec.push(LineString::from(iline_str));
+                    iline_start += ilen * polygon_geo_size;
+                }
+            }
+            (wline_str, iline_str_vec)
         };
-        if start_index > 0 && start_code == find_start {
-            let mut prev_index = start_index;
-            loop {
-                let (code, info) = mmap_find_polygon_data(mmap, prev_index)?;
-                if code == *index {
-                    return Some(info);
-                }
-                if prev_index == 0 || find_start > code {
-                    break;
-                }
-                prev_index -= 1;
-            }
-        }
-        for i in start_index..=max_len - 1 {
-            let (code, info) = mmap_find_polygon_data(mmap, i)?;
-            if code > find_start {
-                break;
-            }
-            if code == *index {
-                return Some(info);
-            }
-        }
-        None
+        Some(AreaGeoIndexInfo::new(exterior, interiors))
     }
     fn save(&mut self, version: &str) -> AreaResult<()> {
         let mut file = OpenOptions::new()
@@ -779,76 +772,70 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
             .truncate(true)
             .open(&self.path)?;
 
-        let mut max_center_length = 0;
-        let center_max_len = self.center_data.len();
-        let mut center_data = Vec::with_capacity(center_max_len);
-        for (index, value, point) in self.center_data.iter() {
-            if value.len() > max_center_length {
-                max_center_length = value.len();
-            }
-            center_data.push((index, value, (point.0.x, point.0.y)));
-        }
-        center_data.sort_by(|a, b| a.0.cmp(b.0));
-
-        //index,lat,lng,key_len
-        let center_prefix = std::mem::size_of::<(u64, usize, f64, f64)>();
-        let center_item_len = center_prefix + max_center_length;
-
+        let mut max_code_length = 0;
         let mut max_polygon_size = 0;
-        let polygon_max_len = self.polygon_data.len();
-        let mut polygon_data = Vec::with_capacity(polygon_max_len);
-        let mut polygon_prefix_len = 0;
-        for tmp in self.polygon_data.iter() {
-            let tmp_len = tmp.1 .0 .0.len() + tmp.1 .1.iter().map(|t| t.0.len()).sum::<usize>();
-            if max_polygon_size < tmp_len {
-                max_polygon_size = tmp_len;
+        let max_len = self.polygon_data.len();
+        let mut polygon_data = Vec::with_capacity(max_len);
+        let mut max_line_len = 0;
+        for (code, center_point, exc_point, inn_point) in self.polygon_data.iter() {
+            if code.len() > max_code_length {
+                max_code_length = code.len();
             }
-            let tmp_str_len = 1 + tmp.1 .1.len();
-            if polygon_prefix_len < tmp_str_len {
-                polygon_prefix_len = tmp_str_len;
+            // 总坐标数
+            let point_max_len =
+                exc_point.0.len() + inn_point.iter().map(|t| t.0.len()).sum::<usize>();
+            if max_polygon_size < point_max_len {
+                max_polygon_size = point_max_len;
             }
-            let mut data_vec = Vec::with_capacity(tmp_len);
-            for tmp1 in &tmp.1 .0 .0 {
-                data_vec.push((tmp1.x, tmp1.y));
+            let line_len = 1 + inn_point.len(); //总line数量
+            if max_line_len < line_len {
+                max_line_len = line_len;
             }
-            for tmp2 in &tmp.1 .1 {
+            let mut data_vec = Vec::with_capacity(point_max_len);
+            for tmp1 in &exc_point.0 {
+                data_vec.push(tmp1);
+            }
+            for tmp2 in inn_point {
                 for tmp3 in &tmp2.0 {
-                    data_vec.push((tmp3.x, tmp3.y));
+                    data_vec.push(tmp3);
                 }
             }
             polygon_data.push((
-                tmp.1 .0 .0.len(),
-                tmp.1 .1.len(),
-                tmp.1 .1.iter().map(|t| t.0.len()).collect::<Vec<usize>>(),
+                code,                                                        //编码字符串
+                center_point,                                                //中间坐标点
+                exc_point.0.len(),                                           //外部line的总元素数量
+                inn_point.len(),                                             //内部line的总数量
+                inn_point.iter().map(|t| t.0.len()).collect::<Vec<usize>>(), //内部line的分别总元素数量
                 data_vec,
             ));
         }
+        //key_len,lat,lng,
+        let center_prefix = std::mem::size_of::<DiskAreaGeoCenterPrefix>();
+        let center_item_len = center_prefix + max_code_length;
 
-        //center_max_len,max_center_length,polygon_prefix_len,polygon_max_len,max_polygon_size,version_len
-        let info_len =
-            std::mem::size_of::<(usize, usize, usize, usize, usize, usize)>() + version.len();
-        let mmap_center_size = center_item_len * center_max_len;
+        //max_len,max_center_length,polygon_prefix_len,max_polygon_size,version_len
+        let info_len = std::mem::size_of::<DiskAreaGeoInfo>() + version.len();
+        let mmap_center_size = center_item_len * max_len;
 
         //index,1+n,(lat,lng)*m
-        let polygon_prefix_item = std::mem::size_of::<usize>();
-        let polygon_prefix = std::mem::size_of::<u64>() + polygon_prefix_item * polygon_prefix_len;
+        let polygon_prefix = std::mem::size_of::<usize>() * max_line_len;
         let polygon_geo_size = std::mem::size_of::<(f64, f64)>();
         let polygon_item_size = polygon_prefix + max_polygon_size * polygon_geo_size;
-        let mmap_polygon_size = polygon_item_size * polygon_max_len;
+        let mmap_polygon_size = polygon_item_size * max_len;
 
         file.set_len((info_len + mmap_center_size + mmap_polygon_size) as u64)?;
         file.seek(SeekFrom::Start(0))?;
 
+        //把数据写入映射
         let mut mmap = unsafe { MmapMut::map_mut(&file)? };
         let ptr = mmap.as_mut_ptr();
         let tmp = &(
-            center_max_len,
-            max_center_length,
-            polygon_prefix_len,
-            polygon_max_len,
-            max_polygon_size,
-            version.len(),
-        ) as *const (usize, usize, usize, usize, usize, usize) as *const u8;
+            max_len,          //元素总量
+            max_code_length,  //code 最大长度
+            max_line_len,     //最大线数量
+            max_polygon_size, //坐标总数量
+            version.len(),    //版本字符串长度
+        ) as *const DiskAreaGeoInfo as *const u8;
         unsafe {
             std::ptr::copy_nonoverlapping(tmp, ptr, info_len);
             std::ptr::copy_nonoverlapping(
@@ -857,12 +844,21 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
                 version.len(),
             );
         }
-        //write center data  mmap
-        for (i, (index, key, item)) in center_data.into_iter().enumerate() {
-            //index,lat,lng,key_len
-            let tmp = &(index.to_owned(), item.0, item.1, key.len())
-                as *const (u64, f64, f64, usize) as *const u8;
+        //write data to mmap
+        // code,          //编码字符串
+        // center_point,      //中间坐标点
+        // exc_len,   //外部line的总元素数量
+        // iner_len,  //内部line的总数量
+        // iner_data, //内部line的分别总元素数量
+        // data_vec,//总坐标数据
+        for (i, (code, center_point, exc_len, iner_len, iner_data, data_vec)) in
+            polygon_data.into_iter().enumerate()
+        {
             let ptr = mmap.as_mut_ptr();
+            //保存中间坐标点到mmap
+            //key_len,lat,lng,
+            let tmp = &(code.len(), center_point.0.x, center_point.0.y)
+                as *const DiskAreaGeoCenterPrefix as *const u8;
             unsafe {
                 std::ptr::copy_nonoverlapping(
                     tmp,
@@ -871,18 +867,15 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
                 );
                 let key_start = i * center_item_len + info_len + center_prefix;
                 std::ptr::copy_nonoverlapping(
-                    key.as_bytes().as_ptr(),
+                    code.as_bytes().as_ptr(),
                     ptr.add(key_start),
-                    key.len(),
+                    code.len(),
                 );
             }
-        }
-        //write polygon data to mmap
-        for (i, (wlen, ilen, idata, pdata)) in polygon_data.into_iter().enumerate() {
-            //index,lat,lng,key_len
-            let tmp = &(wlen, ilen) as *const (usize, usize) as *const u8;
+            //保存元素坐标点到mmap
+            //lat,lng,key_len
+            let tmp = &(exc_len, iner_len) as *const (usize, usize) as *const u8;
             let tmp_size = std::mem::size_of::<(usize, usize)>();
-            let ptr = mmap.as_mut_ptr();
             unsafe {
                 std::ptr::copy_nonoverlapping(
                     tmp,
@@ -891,7 +884,7 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
                 );
 
                 let tmpii_size = std::mem::size_of::<usize>();
-                for (iit, iitmp) in idata.iter().enumerate() {
+                for (iit, iitmp) in iner_data.iter().enumerate() {
                     let tmp1 = iitmp as *const usize as *const u8;
                     std::ptr::copy_nonoverlapping(
                         tmp1,
@@ -906,8 +899,8 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
                     );
                 }
                 let tmpii_size = std::mem::size_of::<(f64, f64)>();
-                for (iit, iitmp) in pdata.iter().enumerate() {
-                    let tmp1 = iitmp as *const (f64, f64) as *const u8;
+                for (iit, iitmp) in data_vec.iter().enumerate() {
+                    let tmp1 = &(iitmp.x, iitmp.y) as *const (f64, f64) as *const u8;
                     std::ptr::copy_nonoverlapping(
                         tmp1,
                         ptr.add(
@@ -925,8 +918,7 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
         mmap.flush()?;
         file.seek(SeekFrom::Start(0))?;
         let mmap = unsafe { Mmap::map(&file)? };
-        self.center_data = vec![];
-        self.polygon_data = HashMap::new();
+        self.polygon_data = vec![];
         self.mmap = Some(mmap);
         Ok(())
     }
@@ -934,11 +926,7 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
         self.mmap
             .as_ref()
             .map(|e| {
-                mmap_find_version(
-                    e,
-                    std::mem::size_of::<(usize, usize, usize, usize, usize)>(),
-                )
-                .unwrap_or_default()
+                mmap_find_version(e, std::mem::size_of::<DiskAreaGeoInfo>()).unwrap_or_default()
             })
             .unwrap_or_default()
     }
@@ -950,10 +938,20 @@ pub struct AreaStoreDisk {
 }
 impl AreaStoreDisk {
     pub fn new(dir: PathBuf, index_size: Option<usize>) -> Self {
+        if std::fs::metadata(&dir).is_err() {
+            let _ = std::fs::create_dir(&dir);
+        }
         Self {
             dir,
             index_size: index_size.unwrap_or(500_000_000),
         }
+    }
+    pub fn clear(self) -> AreaResult<Self> {
+        remove_dir_all(&self.dir)?;
+        if std::fs::metadata(&self.dir).is_err() {
+            std::fs::create_dir(&self.dir)?;
+        }
+        Ok(self)
     }
 }
 

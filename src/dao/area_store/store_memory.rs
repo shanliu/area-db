@@ -32,7 +32,9 @@ impl AreaCodeIndexData for AreaCodeIndexDataHashMap {
         self.version = version.to_owned();
         Ok(())
     }
-
+    fn load(&mut self) -> AreaResult<()> {
+        Ok(())
+    }
     fn version(&self) -> String {
         self.version.clone()
     }
@@ -60,6 +62,9 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeHashMap {
         self.data = AreaCodeIndexTreeItemHashMap {
             data: HashMap::new(),
         };
+        Ok(())
+    }
+    fn load(&mut self) -> AreaResult<()> {
         Ok(())
     }
     fn add(&mut self, code_data: Vec<&str>) -> AreaResult<()> {
@@ -137,8 +142,9 @@ impl AreaCodeProvider for MemoryAreaCodeProvider {
 #[derive(Default)]
 pub struct MemoryAreaGeoProvider {
     version: String,
-    center_data: Vec<(u64, String, Point)>,
-    polygon_data: HashMap<u64, (LineString, Vec<LineString>)>,
+    center_data: Vec<(usize, String, Point)>,
+    polygon_data: HashMap<usize, (LineString, Vec<LineString>)>,
+    max_index: usize,
 }
 
 impl AreaGeoProvider for MemoryAreaGeoProvider {
@@ -151,27 +157,24 @@ impl AreaGeoProvider for MemoryAreaGeoProvider {
         self.version = version.to_owned();
         Ok(())
     }
-    fn add_center_data(&mut self, i: u64, center: &str, geo: Point) -> AreaResult<()> {
-        self.center_data.push((i, center.to_string(), geo));
-        Ok(())
-    }
-    fn get_center_data(&self) -> AreaResult<Vec<(u64, String, Point)>> {
-        Ok(self
-            .center_data
-            .iter()
-            .map(|(i, c, v)| (i.to_owned(), c.to_owned(), v.to_owned()))
-            .collect())
-    }
-    fn set_polygon_data(
+    fn push_data(
         &mut self,
-        i: u64,
+        code: &str,
+        center_geo: Point,
         exterior: LineString,
         interiors: Vec<LineString>,
     ) -> AreaResult<()> {
-        self.polygon_data.insert(i, (exterior, interiors));
+        self.max_index += 1;
+        self.center_data
+            .push((self.max_index, code.to_string(), center_geo));
+        self.polygon_data
+            .insert(self.max_index, (exterior, interiors));
         Ok(())
     }
-    fn get_polygon_data(&self, i: &u64) -> Option<AreaGeoIndexInfo> {
+    fn get_center_data(&self) -> AreaResult<Vec<(usize, String, Point)>> {
+        Ok(self.center_data.iter().map(|t| t.to_owned()).collect())
+    }
+    fn get_polygon_data(&self, i: &usize) -> Option<AreaGeoIndexInfo> {
         self.polygon_data
             .get(i)
             .map(|e| AreaGeoIndexInfo::new(e.0.to_owned(), e.1.to_owned()))
