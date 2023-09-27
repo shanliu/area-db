@@ -148,8 +148,8 @@ impl<AP: AreaCodeProvider> AreaCode<AP> {
             code_data_tree.add(Self::code_parse(&tmp_area.code))?;
             key_words.insert(tmp_area.code.as_str(), &tmp_area.key_word);
         }
-        code_data_tree.save(version)?;
         code_data.save(version)?;
+        code_data_tree.save(version)?;
         for (code, last_key_word) in key_words.iter() {
             let mut area_doc = doc!();
             let mut codes = Self::code_parse(code);
