@@ -697,12 +697,13 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
         };
 
         let info_len = std::mem::size_of::<DiskAreaGeoInfo>();
+
         let (
-            max_len,            //元素总量
-            max_code_length,    //code 最大长度
-            polygon_prefix_len, //最大线数量
-            max_polygon_size,   //坐标总数量
-            version_len,        //版本字符串长度
+            max_len,          //元素总量
+            max_code_length,  //code 最大长度
+            max_line_len,     //最大线数量
+            max_polygon_size, //坐标总数量
+            version_len,      //版本字符串长度
         ) = unsafe {
             let ptr = mmap[0..].as_ptr() as *const DiskAreaGeoInfo;
             ptr.read()
@@ -716,16 +717,15 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
         let info_all_len = info_len + version_len + mmap_center_size;
 
         let polygon_prefix_item = std::mem::size_of::<usize>();
-        let polygon_prefix =
-            std::mem::size_of::<usize>() + polygon_prefix_item * polygon_prefix_len;
+        let polygon_prefix = std::mem::size_of::<usize>() * max_line_len;
         let polygon_geo_size = std::mem::size_of::<(f64, f64)>();
         let item_len = polygon_prefix + max_polygon_size * polygon_geo_size;
 
-        let polygon_tmp_prefix = std::mem::size_of::<(usize, usize, usize)>();
         let (exterior, interiors) = unsafe {
             let ptr = mmap[info_all_len + index * item_len..].as_ptr() as *const (usize, usize);
             // //index,外框元素长度,内框数量
             let (wlen_tmp, ilen_tmp): (usize, usize) = ptr.read();
+            let polygon_tmp_prefix = std::mem::size_of::<(usize, usize)>();
             let mut wout = Vec::with_capacity(wlen_tmp);
             if wlen_tmp > 0 {
                 for sub_i in 0..ilen_tmp {
