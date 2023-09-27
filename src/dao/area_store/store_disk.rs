@@ -56,20 +56,22 @@ impl AreaCodeIndexDataDisk {
     }
 }
 
-fn index_search(index: &[u64], find: &u64) -> (usize, usize, usize) {
-    let find_index = index.binary_search(find).unwrap_or_default();
+fn index_search(index: &[u64], find: &u64) -> (Option<usize>, usize, usize) {
+    let find_index = index.binary_search(find).ok();
     let mut start_index = 0;
-    let mut end_index = find_index;
-    for i in (0..=find_index).rev() {
-        if index[i] < *find {
-            start_index = i;
-            break;
+    let mut end_index = find_index.unwrap_or_default();
+    if let Some(tmp_find_index) = &find_index {
+        for i in (0..=*tmp_find_index).rev() {
+            if index[i] < *find {
+                start_index = i;
+                break;
+            }
         }
-    }
-    for (i, tmp) in index.iter().enumerate().skip(find_index) {
-        if *tmp > *find {
-            end_index = i;
-            break;
+        for (i, tmp) in index.iter().enumerate().skip(*tmp_find_index) {
+            if *tmp > *find {
+                end_index = i;
+                break;
+            }
         }
     }
     (find_index, start_index, end_index)
@@ -130,7 +132,11 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
                 return None;
             }
             let find_start = index.parse::<u64>().unwrap_or(0);
-            let (find_index, start_index, end_index) = index_search(&self.index, &find_start);
+            let (find_index_tmp, start_index, end_index) = index_search(&self.index, &find_start);
+            let find_index = match find_index_tmp {
+                Some(tmp) => tmp,
+                None => return None,
+            };
             if find_index > 0 {
                 let mut pref_index = find_index;
                 loop {
@@ -335,11 +341,7 @@ fn mmap_find_code_tree(mmap: &Mmap, index: usize) -> AreaResult<(String, Vec<Str
     Ok((key_tmp, val_tmp))
 }
 
-fn mmap_code_tree_childs(
-    index_data: &[u64],
-    mmap: &Mmap,
-    index: &str,
-) -> Option<Vec<(String, bool)>> {
+fn mmap_code_tree_childs(index_data: &[u64], mmap: &Mmap, index: &str) -> Option<Vec<String>> {
     let max_len = unsafe {
         let ptr = mmap[0..].as_ptr() as *const usize;
         ptr.read()
@@ -349,23 +351,17 @@ fn mmap_code_tree_childs(
         return None;
     }
     let find_start = index.parse::<u64>().unwrap_or(0);
-    let (find_index, start_index, end_index) = index_search(index_data, &find_start);
-
-    if start_index > 0 {
-        let mut prev_index = start_index;
+    let (find_index_tmp, start_index, end_index) = index_search(index_data, &find_start);
+    let find_index = match find_index_tmp {
+        Some(tmp) => tmp,
+        None => return None,
+    };
+    if find_index > 0 {
+        let mut prev_index = find_index;
         loop {
             let (key, val) = mmap_find_code_tree(mmap, prev_index).ok()?;
             if key.as_str() == index {
-                return Some(
-                    val.into_iter()
-                        .map(|t| {
-                            let next = mmap_code_tree_childs(index_data, mmap, &t)
-                                .map(|tt| tt.is_empty())
-                                .unwrap_or(true);
-                            (t, next)
-                        })
-                        .collect(),
-                );
+                return Some(val);
             }
             if prev_index <= start_index {
                 break;
@@ -376,16 +372,7 @@ fn mmap_code_tree_childs(
     for i in find_index..=end_index {
         let (key, val) = mmap_find_code_tree(mmap, i).ok()?;
         if key.as_str() == index {
-            return Some(
-                val.into_iter()
-                    .map(|t| {
-                        let next = mmap_code_tree_childs(index_data, mmap, &t)
-                            .map(|tt| tt.is_empty())
-                            .unwrap_or(true);
-                        (t, next)
-                    })
-                    .collect(),
-            );
+            return Some(val);
         }
     }
     None
@@ -458,9 +445,25 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
         Ok(())
     }
     fn childs(&self, code_data: &[&str]) -> Option<Vec<(String, bool)>> {
-        let index = code_data.join("");
+        let index = match code_data.last() {
+            Some(t) => t,
+            None => return None,
+        };
         if let Some(mmap) = &self.mmap {
-            return mmap_code_tree_childs(&self.index, mmap, &index);
+            let tmp = match mmap_code_tree_childs(&self.index, mmap, index) {
+                Some(dat) => dat,
+                None => return None,
+            };
+            return Some(
+                tmp.into_iter()
+                    .map(|t| {
+                        let next = mmap_code_tree_childs(&self.index, mmap, &t)
+                            .map(|tt| tt.is_empty())
+                            .unwrap_or(true);
+                        (t, next)
+                    })
+                    .collect(),
+            );
         }
         None
     }
