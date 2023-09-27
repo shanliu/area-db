@@ -56,7 +56,7 @@ impl AreaCodeIndexDataDisk {
     }
 }
 
-fn index_search<T: Ord>(index: &[T], find: &T) -> (usize, usize, usize) {
+fn index_search(index: &[u64], find: &u64) -> (usize, usize, usize) {
     let find_index = index.binary_search(find).unwrap_or_default();
     let mut start_index = 0;
     let mut end_index = find_index;
