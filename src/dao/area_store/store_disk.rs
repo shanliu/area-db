@@ -205,7 +205,6 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
         let mut max_value_length = 0;
         let max_len = self.hash.len();
         let mut vec_data = Vec::with_capacity(max_len);
-        self.index = Vec::with_capacity(vec_data.len());
         for (key, value) in self.hash.iter() {
             if key.len() > max_key_length {
                 max_key_length = key.len();
@@ -213,10 +212,11 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
             if value.name.len() > max_value_length {
                 max_value_length = value.name.len();
             }
-            vec_data.push((key, value));
-            self.index.push(key.parse::<u64>().unwrap_or(0));
+            let index = key.parse::<u64>().unwrap_or(0);
+            vec_data.push((index, key, value));
         }
         vec_data.sort_by(|a, b| a.0.cmp(&b.0));
+        let index_data = vec_data.iter().map(|e| e.0).collect::<Vec<u64>>();
         //元素数量，最大key长度，最大value长度，版本信息长度 + 版本内容长度
         let info_len = std::mem::size_of::<AreaCodeInfo>()
             + version.len()
@@ -236,7 +236,7 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
                 ptr.add(std::mem::size_of::<AreaCodeInfo>()),
                 version.len(),
             );
-            for (i, tmp) in self.index.iter().enumerate() {
+            for (i, tmp) in index_data.iter().enumerate() {
                 let tlen = std::mem::size_of::<u64>();
                 std::ptr::copy_nonoverlapping(
                     tmp.to_be_bytes().as_ptr(),
@@ -246,7 +246,7 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
             }
         }
 
-        for (i, (key, value)) in vec_data.into_iter().enumerate() {
+        for (i, (_, key, value)) in vec_data.into_iter().enumerate() {
             let tmp = &(key.len(), value.hide, value.name.len()) as *const AreaCodeItemPrefix
                 as *const u8;
             let ptr = mmap.as_mut_ptr();
@@ -271,6 +271,7 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
         let mmap = unsafe { Mmap::map(&file)? };
         self.hash = HashMap::new();
         self.mmap = Some(mmap);
+        self.index = index_data;
         Ok(())
     }
     fn version(&self) -> String {
@@ -475,7 +476,7 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
         let mut max_tree_count = 0;
         let max_len = self.data.len();
         let mut vec_data = Vec::with_capacity(max_len);
-        self.index = Vec::with_capacity(vec_data.len());
+
         for (key, value) in self.data.iter() {
             if key.len() > max_key_length {
                 max_key_length = key.len();
@@ -488,11 +489,10 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
                 max_tree_length = max_str_len;
             }
             let index = key.parse::<u64>().unwrap_or(0);
-            vec_data.push((key, value, max_tree_count, max_tree_length));
-            self.index.push(index);
+            vec_data.push((index, key, value, max_tree_count, max_tree_length));
         }
         vec_data.sort_by(|a, b| a.0.cmp(&b.0));
-
+        let index_data = vec_data.iter().map(|e| e.0).collect::<Vec<u64>>();
         //index,key_length,sub-code-count,sub-code-len,
         let prefix = std::mem::size_of::<AreaCodeTreeItemPrefix>();
         let item_len = prefix + max_key_length + max_tree_length * max_tree_count;
@@ -520,7 +520,7 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
                 ptr.add(std::mem::size_of::<AreaCodeTreeInfo>()),
                 version.len(),
             );
-            for (i, tmp) in self.index.iter().enumerate() {
+            for (i, tmp) in index_data.iter().enumerate() {
                 let tlen = std::mem::size_of::<u64>();
                 std::ptr::copy_nonoverlapping(
                     tmp.to_be_bytes().as_ptr(),
@@ -530,7 +530,9 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
             }
         }
 
-        for (i, (key, value, max_tree_count, max_tree_length)) in vec_data.into_iter().enumerate() {
+        for (i, (_, key, value, max_tree_count, max_tree_length)) in
+            vec_data.into_iter().enumerate()
+        {
             //key_length,sub-code-count,sub-code-len,
             let tmp = &(key.len(), max_tree_count, max_tree_length) as *const AreaCodeTreeItemPrefix
                 as *const u8;
@@ -565,6 +567,7 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
         let mmap = unsafe { Mmap::map(&file)? };
         self.data = HashMap::new();
         self.mmap = Some(mmap);
+        self.index = index_data;
         Ok(())
     }
     fn version(&self) -> String {
