@@ -5,13 +5,18 @@ use area_db::{AreaDao, AreaStoreDisk, CsvAreaCodeData, CsvAreaData, CsvAreaGeoDa
 use axum::{extract::Path, extract::Query, routing::get, Router};
 use serde_json::json;
 mod area;
-use temp_dir::TempDir;
 #[tokio::main]
 async fn main() {
-    let binding = TempDir::new().unwrap();
-    let index_dir = binding.path().to_path_buf();
-    let code_path = PathBuf::from("../../data/2023-7-area-code.csv.gz");
-    let geo_path = PathBuf::from("../../data/2023-7-area-geo.csv.gz");
+    let mut index_dir = std::env::temp_dir();
+    index_dir.push("area-db-data");
+    let mut code_path = PathBuf::from("../../data/2023-7-area-code.csv.gz");
+    if !code_path.is_file() {
+        code_path = PathBuf::from("data/2023-7-area-code.csv.gz");
+    }
+    let mut geo_path = PathBuf::from("../../data/2023-7-area-geo.csv.gz");
+    if !geo_path.is_file() {
+        geo_path = PathBuf::from("data/2023-7-area-geo.csv.gz");
+    }
     let data = CsvAreaData::new(
         CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
         CsvAreaGeoData::from_inner_path(geo_path, true).ok(),
