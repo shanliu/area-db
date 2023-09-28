@@ -854,10 +854,10 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
             version.len(),    //版本字符串长度
         ) as *const DiskAreaGeoInfo as *const u8;
         unsafe {
-            std::ptr::copy_nonoverlapping(tmp, ptr, info_len);
+            std::ptr::copy_nonoverlapping(tmp, ptr, std::mem::size_of::<DiskAreaGeoInfo>());
             std::ptr::copy_nonoverlapping(
                 version.as_bytes().as_ptr(),
-                ptr.add(info_len),
+                ptr.add(std::mem::size_of::<DiskAreaGeoInfo>()),
                 version.len(),
             );
         }
