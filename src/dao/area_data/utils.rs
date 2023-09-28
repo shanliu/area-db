@@ -1,23 +1,18 @@
-use std::{path::PathBuf, time::UNIX_EPOCH};
+use std::path::PathBuf;
 
 use crate::{AreaError, AreaResult};
 
 #[allow(dead_code)]
-pub(crate) fn read_file_modified_time(path: &PathBuf) -> Option<u64> {
-    if let Ok(metadata) = std::fs::metadata(path) {
-        if let Ok(modified_time) = metadata.modified() {
-            Some(
-                modified_time
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs(),
-            )
-        } else {
-            None
+pub(crate) fn read_file_md5(path: &PathBuf) -> String {
+    use sha2::{Digest, Sha256};
+    use std::{fs, io};
+    if let Ok(mut file) = fs::File::open(&path) {
+        let mut hasher = Sha256::new();
+        if let Ok(_) = io::copy(&mut file, &mut hasher) {
+            return format!("{:x}", hasher.finalize());
         }
-    } else {
-        None
     }
+    "".to_string()
 }
 #[allow(dead_code)]
 pub(crate) fn read_file(path: &PathBuf) -> AreaResult<Vec<u8>> {

@@ -8,7 +8,7 @@ use crate::{
     AreaGeoDataItem, AreaResult,
 };
 
-use super::utils::{de_gz_data, en_name_keyword, read_file, read_file_modified_time};
+use super::utils::{de_gz_data, en_name_keyword, read_file, read_file_md5};
 impl From<std::io::Error> for AreaError {
     fn from(err: std::io::Error) -> Self {
         AreaError::DB(err.to_string())
@@ -230,16 +230,11 @@ impl AreaDataProvider for CsvAreaData {
         }
     }
     fn code_data_version(&self) -> String {
-        if let Some(lt) = read_file_modified_time(&self.code_config.csv_data) {
-            return format!("code-{}", lt);
-        }
-        "".to_string()
+        read_file_md5(&self.code_config.csv_data)
     }
     fn geo_data_version(&self) -> String {
         if let Some(geo_config) = &self.geo_config {
-            if let Some(lt) = read_file_modified_time(&geo_config.csv_data) {
-                return format!("geo-{}", lt);
-            }
+            return read_file_md5(&geo_config.csv_data);
         }
         "".to_string()
     }

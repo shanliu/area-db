@@ -7,7 +7,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{AreaCodeData, AreaDataProvider, AreaError, AreaGeoData, AreaGeoDataItem, AreaResult};
 
-use super::utils::{en_name_keyword, read_file_modified_time};
+use super::utils::en_name_keyword;
 
 impl From<rusqlite::Error> for AreaError {
     fn from(err: rusqlite::Error) -> Self {
@@ -155,16 +155,11 @@ impl AreaDataProvider for SqliteAreaData {
         }
     }
     fn code_data_version(&self) -> String {
-        if let Some(lt) = read_file_modified_time(&self.code_config.conn) {
-            return format!("code-{}", lt);
-        }
-        "".to_string()
+        read_file_md5(&self.code_config.conn)
     }
     fn geo_data_version(&self) -> String {
         if let Some(geo_config) = &self.geo_config {
-            if let Some(lt) = read_file_modified_time(&geo_config.conn) {
-                return format!("geo-{}", lt);
-            }
+            return read_file_md5(&geo_config.conn);
         }
         "".to_string()
     }
