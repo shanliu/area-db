@@ -36,26 +36,40 @@ fn test_sqlite() {
 #[test]
 fn test_csv() {
     use area_db::{AreaStoreDisk, AreaStoreMemory};
-
     let code_path = std::path::PathBuf::from(format!(
         "{}/data/2023-7-area-code.csv.gz",
         env!("CARGO_MANIFEST_DIR")
     ));
-    let geo_data = {
-        let geo_path = std::path::PathBuf::from(format!(
-            "{}/data/2023-7-area-geo.csv.gz",
-            env!("CARGO_MANIFEST_DIR")
-        ));
-        Some(area_db::CsvAreaGeoData::from_inner_path(geo_path, true).unwrap())
-    };
+    let geo_path = std::path::PathBuf::from(format!(
+        "{}/data/2023-7-area-geo.csv.gz",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+
+    //mem
+    let geo_data =
+        { Some(area_db::CsvAreaGeoData::from_inner_path(geo_path.clone(), true).unwrap()) };
     let data = area_db::CsvAreaData::new(
-        area_db::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
+        area_db::CsvAreaCodeData::from_inner_path(code_path.clone(), true).unwrap(),
         geo_data,
     );
     test_branch(&area_db::AreaDao::from_csv_mem(data, AreaStoreMemory::default()).unwrap());
-    // test_branch(
-    //     &area_db::AreaDao::from_csv_disk(data, AreaStoreDisk::new("./tmp".into(), None)).unwrap(),
-    // );
+
+    //disk
+    let geo_data = { Some(area_db::CsvAreaGeoData::from_inner_path(geo_path, true).unwrap()) };
+    let data1 = area_db::CsvAreaData::new(
+        area_db::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
+        geo_data,
+    );
+    test_branch(
+        &area_db::AreaDao::from_csv_disk(
+            data1,
+            AreaStoreDisk::new("./target/tmp1".into(), None)
+                .unwrap()
+                .clear()
+                .unwrap(),
+        )
+        .unwrap(),
+    );
 }
 
 #[allow(dead_code)]
@@ -89,8 +103,8 @@ fn test_branch(area: &area_db::AreaDao) {
     for i in 0..10 {
         let start = std::time::Instant::now();
         area.geo_search(
-            26.61474 + (i as f64 / 10000.0),
-            114.13548 + (i as f64 / 10000.0),
+            26.61474 + (i as f64 / 1000.0),
+            114.13548 + (i as f64 / 1000.0),
         )
         .unwrap();
         let duration = start.elapsed();
