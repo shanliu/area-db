@@ -157,15 +157,18 @@ pub unsafe extern "C" fn area_db_init_csv_on_disk(
 
     let index_size = index_size as usize;
     let index_disk_dir = cstr_to_string!(index_disk, error);
+
+    let store_obj = unwrap_or_c_error!(
+        if index_size > 0 {
+            AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), Some(index_size))
+        } else {
+            AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), None)
+        },
+        error
+    );
+
     let area_obj = unwrap_or_c_error!(
-        AreaDao::from_csv_disk(
-            crate::CsvAreaData::new(code_config, geo_config),
-            if index_size > 0 {
-                AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), Some(index_size))
-            } else {
-                AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), None)
-            }
-        ),
+        AreaDao::from_csv_disk(crate::CsvAreaData::new(code_config, geo_config), store_obj),
         error
     );
     init_area(area_dao, area_obj)
@@ -244,14 +247,20 @@ pub unsafe extern "C" fn area_db_init_sqlite_on_disk(
 
     let index_size = index_size as usize;
     let index_disk_dir = cstr_to_string!(index_disk, error);
+
+    let store_obj = unwrap_or_c_error!(
+        if index_size > 0 {
+            AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), Some(index_size))
+        } else {
+            AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), None)
+        },
+        error
+    );
+
     let area_obj = unwrap_or_c_error!(
         AreaDao::from_sqlite_disk(
             crate::SqliteAreaData::new(code_config, geo_config),
-            if index_size > 0 {
-                AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), Some(index_size))
-            } else {
-                AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), None)
-            }
+            store_obj
         ),
         error
     );
@@ -328,14 +337,20 @@ pub unsafe extern "C" fn area_db_init_mysql_on_disk(
     let index_size = index_size as usize;
 
     let index_disk_dir = cstr_to_string!(index_disk, error);
+
+    let store_obj = unwrap_or_c_error!(
+        if index_size > 0 {
+            AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), Some(index_size))
+        } else {
+            AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), None)
+        },
+        error
+    );
+
     let area_obj = unwrap_or_c_error!(
         AreaDao::from_mysql_disk(
             crate::MysqlAreaData::new(code_config, geo_config),
-            if index_size > 0 {
-                AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), Some(index_size))
-            } else {
-                AreaStoreDisk::new(PathBuf::from(index_disk_dir.trim()), None)
-            }
+            store_obj
         ),
         error
     );
