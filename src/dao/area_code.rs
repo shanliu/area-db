@@ -56,7 +56,7 @@ pub trait AreaCodeIndexData {
     fn set(&mut self, key: String, val: AreaCodeIndexInfo) -> AreaResult<()>;
     fn save(&mut self, version: &str) -> AreaResult<()>;
     fn version(&self) -> String;
-    fn load(&mut self) -> AreaResult<()>;
+    fn init(&mut self) -> AreaResult<()>;
 }
 
 pub trait AreaCodeIndexTree {
@@ -65,7 +65,7 @@ pub trait AreaCodeIndexTree {
     fn childs(&self, code_data: &[&str]) -> Option<Vec<(String, bool)>>;
     fn version(&self) -> String;
     fn save(&mut self, version: &str) -> AreaResult<()>;
-    fn load(&mut self) -> AreaResult<()>;
+    fn init(&mut self) -> AreaResult<()>;
 }
 
 pub trait AreaCodeTantivy {
@@ -110,8 +110,8 @@ impl<AP: AreaCodeProvider> AreaCode<AP> {
         tantivy_index
             .tokenizers()
             .register("keyword", WhitespaceTokenizer::default());
-        code_data_tree.load()?;
-        code_data.load()?;
+        code_data_tree.init()?;
+        code_data.init()?;
         Ok(Self {
             code_tantivy,
             code_data,
@@ -120,6 +120,10 @@ impl<AP: AreaCodeProvider> AreaCode<AP> {
             tantivy_code_field,
             tantivy_keyword_field,
         })
+    }
+    pub fn version_match(&self, version: &str) -> bool {
+        self.code_data.version().as_str() == version
+            && self.code_data_tree.version().as_str() == version
     }
     pub fn load_data(
         &mut self,
@@ -130,9 +134,6 @@ impl<AP: AreaCodeProvider> AreaCode<AP> {
         let code_data = &mut self.code_data;
         let code_data_tree = &mut self.code_data_tree;
 
-        if code_data.version().as_str() == version && code_data_tree.version().as_str() == version {
-            return Ok(());
-        }
         code_data.clear()?;
         code_data_tree.clear()?;
         let mut key_words = HashMap::with_capacity(area_code_data.len());

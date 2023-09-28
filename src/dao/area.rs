@@ -39,17 +39,21 @@ impl<DO: AreaStoreProvider, DD: AreaDataProvider> Area<DO, DD> {
         Ok(out)
     }
     pub fn code_reload(&self) -> AreaResult<()> {
-        self.code.write().load_data(
-            self.data_provider.code_data()?,
-            &self.data_provider.code_data_version(),
-        )?;
+        let data_ver = self.data_provider.code_data_version();
+        if !self.code.read().version_match(&data_ver) {
+            self.code
+                .write()
+                .load_data(self.data_provider.code_data()?, &data_ver)?;
+        }
         Ok(())
     }
     pub fn geo_reload(&self) -> AreaResult<()> {
-        self.geo.write().load_data(
-            self.data_provider.geo_data()?,
-            &self.data_provider.geo_data_version(),
-        )?;
+        let data_ver = self.data_provider.geo_data_version();
+        if !self.geo.read().version_match(&data_ver) {
+            self.geo
+                .write()
+                .load_data(self.data_provider.geo_data()?, &data_ver)?;
+        }
         Ok(())
     }
     pub fn code_childs(&self, code: &str) -> AreaResult<Vec<AreaCodeItem>> {

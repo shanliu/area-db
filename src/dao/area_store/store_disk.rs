@@ -159,7 +159,7 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
         }
         None
     }
-    fn load(&mut self) -> AreaResult<()> {
+    fn init(&mut self) -> AreaResult<()> {
         let mut file = match OpenOptions::new().read(true).open(&self.path) {
             Ok(file) => file,
             Err(err) => match err.kind() {
@@ -180,7 +180,7 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
             }
         }
         file.seek(SeekFrom::Start(0))?;
-        let mmap = &unsafe { Mmap::map(&file)? };
+        let mmap = unsafe { Mmap::map(&file)? };
         let info_len = std::mem::size_of::<AreaCodeInfo>();
         let (max_len, _, _, version_len) = unsafe {
             let ptr = mmap[0..].as_ptr() as *const AreaCodeInfo;
@@ -190,14 +190,18 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
             return Ok(());
         }
         let mut index_data = Vec::with_capacity(max_len);
+        let tlen = std::mem::size_of::<u64>();
         for i in 0..max_len {
             unsafe {
-                let ptr =
-                    mmap[info_len + version_len + i * std::mem::size_of::<u64>()] as *const u64;
+                let ipd_start = info_len + version_len + tlen * i;
+                let ipd_end = ipd_start + tlen;
+                let ptr = (&mmap)[ipd_start..ipd_end].as_ptr() as *const u64;
                 index_data.push(ptr.read());
             }
         }
         self.index = index_data;
+        self.mmap = Some(mmap);
+        self.hash = HashMap::new();
         Ok(())
     }
     fn save(&mut self, version: &str) -> AreaResult<()> {
@@ -242,10 +246,11 @@ impl AreaCodeIndexData for AreaCodeIndexDataDisk {
                 ptr.add(std::mem::size_of::<AreaCodeInfo>()),
                 version.len(),
             );
+            let tlen = std::mem::size_of::<u64>();
             for (i, tmp) in index_data.iter().enumerate() {
-                let tlen = std::mem::size_of::<u64>();
+                let tmpadd = tmp as *const u64 as *const u8;
                 std::ptr::copy_nonoverlapping(
-                    tmp.to_be_bytes().as_ptr(),
+                    tmpadd,
                     ptr.add(std::mem::size_of::<AreaCodeInfo>() + version.len() + i * tlen),
                     tlen,
                 );
@@ -385,7 +390,7 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
         self.index = vec![];
         Ok(())
     }
-    fn load(&mut self) -> AreaResult<()> {
+    fn init(&mut self) -> AreaResult<()> {
         let mut file = match OpenOptions::new().read(true).open(&self.path) {
             Ok(file) => file,
             Err(err) => match err.kind() {
@@ -406,7 +411,7 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
             }
         }
         file.seek(SeekFrom::Start(0))?;
-        let mmap = &unsafe { Mmap::map(&file)? };
+        let mmap = unsafe { Mmap::map(&file)? };
         let info_len = std::mem::size_of::<AreaCodeTreeInfo>();
         let (max_len, _, _, _, version_len) = unsafe {
             let ptr = mmap[0..].as_ptr() as *const AreaCodeTreeInfo;
@@ -416,14 +421,18 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
             return Ok(());
         }
         let mut index_data = Vec::with_capacity(max_len);
+        let tlen = std::mem::size_of::<u64>();
         for i in 0..max_len {
             unsafe {
-                let ptr =
-                    mmap[info_len + version_len + i * std::mem::size_of::<u64>()] as *const u64;
+                let ipd_start = info_len + version_len + tlen * i;
+                let ipd_end = ipd_start + tlen;
+                let ptr = (&mmap)[ipd_start..ipd_end].as_ptr() as *const u64;
                 index_data.push(ptr.read());
             }
         }
         self.index = index_data;
+        self.mmap = Some(mmap);
+        self.data = HashMap::new();
         Ok(())
     }
     fn add(&mut self, code_data: Vec<&str>) -> AreaResult<()> {
@@ -523,13 +532,11 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
                 ptr.add(std::mem::size_of::<AreaCodeTreeInfo>()),
                 version.len(),
             );
-            for (i, tmp) in index_data.iter().enumerate() {
-                let tlen = std::mem::size_of::<u64>();
-                std::ptr::copy_nonoverlapping(
-                    tmp.to_be_bytes().as_ptr(),
-                    ptr.add(std::mem::size_of::<AreaCodeInfo>() + version.len() + i * tlen),
-                    tlen,
-                );
+            let tlen = std::mem::size_of::<u64>();
+            for (i, tmpaa) in index_data.iter().enumerate() {
+                let add_offset = std::mem::size_of::<AreaCodeTreeInfo>() + version.len() + i * tlen;
+                let add_tmp = tmpaa as *const u64 as *const u8;
+                std::ptr::copy_nonoverlapping(add_tmp, ptr.add(add_offset), tlen);
             }
         }
 
@@ -564,9 +571,11 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
         mmap.flush()?;
         file.seek(SeekFrom::Start(0))?;
         let mmap = unsafe { Mmap::map(&file)? };
+
         self.data = HashMap::new();
         self.mmap = Some(mmap);
         self.index = index_data;
+
         Ok(())
     }
     fn version(&self) -> String {
@@ -918,6 +927,32 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
             })
             .unwrap_or_default()
     }
+    fn init(&mut self) -> AreaResult<()> {
+        let mut file = match OpenOptions::new().read(true).open(&self.path) {
+            Ok(file) => file,
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::NotFound => return Ok(()),
+                _ => {
+                    return Err(AreaError::Store(err.to_string()));
+                }
+            },
+        };
+        match file.metadata() {
+            Ok(meta) => {
+                if !meta.is_file() || meta.len() == 0 {
+                    return Ok(());
+                }
+            }
+            Err(err) => {
+                return Err(AreaError::Store(err.to_string()));
+            }
+        }
+        file.seek(SeekFrom::Start(0))?;
+        let mmap = unsafe { Mmap::map(&file)? };
+        self.mmap = Some(mmap);
+        self.polygon_data = vec![];
+        Ok(())
+    }
 }
 
 pub struct AreaStoreDisk {
@@ -925,14 +960,19 @@ pub struct AreaStoreDisk {
     index_size: usize,
 }
 impl AreaStoreDisk {
-    pub fn new(dir: PathBuf, index_size: Option<usize>) -> Self {
-        if std::fs::metadata(&dir).is_err() {
-            let _ = std::fs::create_dir(&dir);
+    pub fn new(dir: PathBuf, index_size: Option<usize>) -> AreaResult<Self> {
+        if let Err(err) = std::fs::metadata(&dir) {
+            match err.kind() {
+                std::io::ErrorKind::NotFound => std::fs::create_dir(&dir)?,
+                err => {
+                    return Err(AreaError::Store(err.to_string()));
+                }
+            }
         }
-        Self {
+        Ok(Self {
             dir,
             index_size: index_size.unwrap_or(500_000_000),
-        }
+        })
     }
     pub fn clear(self) -> AreaResult<Self> {
         remove_dir_all(&self.dir)?;
@@ -975,6 +1015,6 @@ impl AreaStoreProvider for AreaStoreDisk {
     fn create_geo(&self) -> AreaResult<AreaGeo<Self::G>> {
         let mut geo_dir = self.dir.clone();
         geo_dir.push("area_data_geo.bin");
-        Ok(AreaGeo::new(DiskAreaGeoProvider::new(geo_dir)))
+        AreaGeo::new(DiskAreaGeoProvider::new(geo_dir))
     }
 }

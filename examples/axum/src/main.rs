@@ -16,8 +16,9 @@ async fn main() {
         CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
         CsvAreaGeoData::from_inner_path(geo_path, true).ok(),
     );
-    let area_dao =
-        Arc::new(AreaDao::from_csv_disk(data, AreaStoreDisk::new(index_dir, None)).unwrap());
+    let area_dao = Arc::new(
+        AreaDao::from_csv_disk(data, AreaStoreDisk::new(index_dir, None).unwrap()).unwrap(),
+    );
     let app = Router::new().route("/area/:path", {
         let area_dao = Arc::clone(&area_dao);
         get(

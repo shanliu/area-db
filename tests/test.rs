@@ -35,8 +35,7 @@ fn test_sqlite() {
 #[cfg(feature = "data-csv")]
 #[test]
 fn test_csv() {
-    // use area_db::AreaStoreMemory;
-    use area_db::AreaStoreDisk;
+    use area_db::{AreaStoreDisk, AreaStoreMemory};
 
     let code_path = std::path::PathBuf::from(format!(
         "{}/data/2023-7-area-code.csv.gz",
@@ -53,10 +52,10 @@ fn test_csv() {
         area_db::CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
         geo_data,
     );
-    //  test_branch(&area_db::AreaDao::from_csv_mem(data, AreaStoreMemory::default()).unwrap());
-    test_branch(
-        &area_db::AreaDao::from_csv_disk(data, AreaStoreDisk::new("./tmp".into(), None)).unwrap(),
-    );
+    test_branch(&area_db::AreaDao::from_csv_mem(data, AreaStoreMemory::default()).unwrap());
+    // test_branch(
+    //     &area_db::AreaDao::from_csv_disk(data, AreaStoreDisk::new("./tmp".into(), None)).unwrap(),
+    // );
 }
 
 #[allow(dead_code)]

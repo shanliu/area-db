@@ -32,7 +32,7 @@ impl AreaCodeIndexData for AreaCodeIndexDataHashMap {
         self.version = version.to_owned();
         Ok(())
     }
-    fn load(&mut self) -> AreaResult<()> {
+    fn init(&mut self) -> AreaResult<()> {
         Ok(())
     }
     fn version(&self) -> String {
@@ -64,7 +64,7 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeHashMap {
         };
         Ok(())
     }
-    fn load(&mut self) -> AreaResult<()> {
+    fn init(&mut self) -> AreaResult<()> {
         Ok(())
     }
     fn add(&mut self, code_data: Vec<&str>) -> AreaResult<()> {
@@ -157,6 +157,9 @@ impl AreaGeoProvider for MemoryAreaGeoProvider {
         self.version = version.to_owned();
         Ok(())
     }
+    fn init(&mut self) -> AreaResult<()> {
+        Ok(())
+    }
     fn push_data(
         &mut self,
         code: &str,
@@ -213,6 +216,6 @@ impl AreaStoreProvider for AreaStoreMemory {
         )
     }
     fn create_geo(&self) -> AreaResult<AreaGeo<Self::G>> {
-        Ok(AreaGeo::new(MemoryAreaGeoProvider::default()))
+        AreaGeo::new(MemoryAreaGeoProvider::default())
     }
 }

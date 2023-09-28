@@ -46,6 +46,7 @@ pub trait AreaGeoProvider {
     fn get_center_data(&self) -> AreaResult<Vec<(usize, String, Point)>>;
     fn get_polygon_data(&self, i: &usize) -> Option<AreaGeoIndexInfo>;
     fn version(&self) -> String;
+    fn init(&mut self) -> AreaResult<()>;
 }
 
 pub struct AreaGeo<AP: AreaGeoProvider> {
@@ -54,11 +55,15 @@ pub struct AreaGeo<AP: AreaGeoProvider> {
 }
 
 impl<AP: AreaGeoProvider> AreaGeo<AP> {
-    pub fn new(geo_data: AP) -> Self {
-        Self {
+    pub fn new(mut geo_data: AP) -> AreaResult<Self> {
+        geo_data.init()?;
+        Ok(Self {
             geo_data,
             max_distance: 0,
-        }
+        })
+    }
+    pub fn version_match(&self, version: &str) -> bool {
+        self.geo_data.version().as_str() == version
     }
     pub fn load_data(&mut self, area_geo_data: Vec<AreaGeoData>, version: &str) -> AreaResult<()> {
         self.geo_data.clear()?;
