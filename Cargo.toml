@@ -5,7 +5,7 @@ resolver = "2"
 
 [package]
 name = "area-db"
-version = "0.0.21"
+version = "0.1.0"
 authors = ["liushan <shan.liu@msn.com>"]
 edition = "2021"
 build = "src/build.rs"
