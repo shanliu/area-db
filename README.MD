@@ -34,7 +34,7 @@ curl http://127.0.0.1:8080/area/search?key_word=%E6%B7%B1%E5%9C%B3%20%E5%B8%83%E
 
 ```toml
 #cargo.toml 默认仅引入:data-csv 
-area-db = { version = "~0.0.*"}
+area-db = { version = "~0.1.*"}
 ```
 
 ```rust
