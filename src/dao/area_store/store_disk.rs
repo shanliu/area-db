@@ -636,6 +636,17 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
         self.polygon_data = vec![];
         Ok(())
     }
+    fn push_data(
+        &mut self,
+        code: &str,
+        center_geo: Point,
+        exterior: LineString,
+        interiors: Vec<LineString>,
+    ) -> AreaResult<()> {
+        self.polygon_data
+            .push((code.to_string(), center_geo, exterior, interiors));
+        Ok(())
+    }
     fn get_center_data(&self) -> AreaResult<Vec<(usize, String, Point)>> {
         let mmap = match self.mmap.as_ref() {
             Some(t) => t,
@@ -679,23 +690,11 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
         };
         Ok(out)
     }
-    fn push_data(
-        &mut self,
-        code: &str,
-        center_geo: Point,
-        exterior: LineString,
-        interiors: Vec<LineString>,
-    ) -> AreaResult<()> {
-        self.polygon_data
-            .push((code.to_string(), center_geo, exterior, interiors));
-        Ok(())
-    }
     fn get_polygon_data(&self, index: &usize) -> Option<AreaGeoIndexInfo> {
         let mmap = match self.mmap.as_ref() {
             Some(t) => t,
             None => return None,
         };
-
         let info_len = std::mem::size_of::<DiskAreaGeoInfo>();
 
         let (
@@ -709,29 +708,29 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
             ptr.read()
         };
 
-        if max_len == 0 || index + 1 >= max_len {
+        if max_len == 0 || *index >= max_len {
             return None;
         }
+
         let center_prefix = std::mem::size_of::<DiskAreaGeoCenterPrefix>();
         let mmap_center_size = (center_prefix + max_code_length) * max_len;
         let info_all_len = info_len + version_len + mmap_center_size;
 
-        let polygon_prefix = std::mem::size_of::<usize>() * max_line_len;
+        let polygon_prefix = std::mem::size_of::<usize>() * (max_line_len + 1);
         let polygon_geo_size = std::mem::size_of::<(f64, f64)>();
-        let item_len = polygon_prefix + max_polygon_size * polygon_geo_size;
+        let polygon_item_size = polygon_prefix + max_polygon_size * polygon_geo_size;
 
         let (exterior, interiors) = unsafe {
-            let ptr = mmap[info_all_len + index * item_len..].as_ptr() as *const (usize, usize);
+            let item_start = info_all_len + index * polygon_item_size;
+
+            let ptr = mmap[item_start..].as_ptr() as *const (usize, usize);
             // //index,外框元素长度,内框数量
             let (wlen_tmp, ilen_tmp): (usize, usize) = ptr.read();
             let polygon_tmp_prefix = std::mem::size_of::<(usize, usize)>();
             let mut wout = Vec::with_capacity(wlen_tmp);
             if wlen_tmp > 0 {
-                for sub_i in 0..ilen_tmp {
-                    let tmp_ptr = mmap[info_all_len
-                        + index * item_len
-                        + polygon_prefix
-                        + polygon_geo_size * sub_i..]
+                for sub_i in 0..wlen_tmp {
+                    let tmp_ptr = mmap[item_start + polygon_prefix + polygon_geo_size * sub_i..]
                         .as_ptr() as *const (f64, f64);
                     let tmp_data = tmp_ptr.read();
                     wout.push(Point::new(tmp_data.0, tmp_data.1))
@@ -739,15 +738,12 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
             }
             let wline_str = LineString::from(wout);
 
-            let mut iline_start =
-                info_all_len + index * item_len + polygon_prefix + polygon_geo_size * wlen_tmp;
+            let mut iline_start = item_start + polygon_prefix + polygon_geo_size * wlen_tmp;
             let mut iline_str_vec = Vec::with_capacity(ilen_tmp);
             if ilen_tmp > 0 {
                 for sub_i in 0..ilen_tmp {
-                    let ptr = mmap[info_all_len
-                        + index * item_len
-                        + polygon_tmp_prefix
-                        + std::mem::size_of::<usize>() * sub_i..]
+                    let ptr = mmap
+                        [item_start + polygon_tmp_prefix + std::mem::size_of::<usize>() * sub_i..]
                         .as_ptr() as *const usize;
                     let ilen = ptr.read();
                     let mut iline_str = Vec::with_capacity(ilen);
@@ -810,20 +806,31 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
                 data_vec,
             ));
         }
-        //key_len,lat,lng,
-        let center_prefix = std::mem::size_of::<DiskAreaGeoCenterPrefix>();
-        let center_item_len = center_prefix + max_code_length;
-
-        //max_len,max_center_length,polygon_prefix_len,max_polygon_size,version_len
+        //geo数据头部信息：
+        // 元素总量
+        // code 最大长度
+        // 最大线数量
+        // 坐标总数量
+        // 版本字符串长度
         let info_len = std::mem::size_of::<DiskAreaGeoInfo>() + version.len();
+
+        //编码字符长度,中心点坐标[lat,lng],
+        let center_prefix = std::mem::size_of::<DiskAreaGeoCenterPrefix>();
+        //每个中心点坐标大小：前缀+最大编码字符长度
+        let center_item_len = center_prefix + max_code_length;
+        //所有中心点坐标的存储空间大小
         let mmap_center_size = center_item_len * max_len;
 
-        //1+n,(lat,lng)*m
+        //外框坐标数 内框线最大条数 每个线条的坐标数 1+1+n
         let polygon_prefix = std::mem::size_of::<usize>() * (max_line_len + 1);
+        //坐标数据大小
         let polygon_geo_size = std::mem::size_of::<(f64, f64)>();
+        //每个区域坐标总大小
         let polygon_item_size = polygon_prefix + max_polygon_size * polygon_geo_size;
+        //所有区域存储需要大小
         let mmap_polygon_size = polygon_item_size * max_len;
 
+        //设置映射总大小
         file.set_len((info_len + mmap_center_size + mmap_polygon_size) as u64)?;
         file.seek(SeekFrom::Start(0))?;
 
@@ -855,18 +862,14 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
         for (i, (code, center_point, exc_len, iner_len, iner_data, data_vec)) in
             polygon_data.into_iter().enumerate()
         {
-            let ptr = mmap.as_mut_ptr();
             //保存中间坐标点到mmap
             //key_len,lat,lng,
-            let tmp = &(code.len(), center_point.0.x, center_point.0.y)
-                as *const DiskAreaGeoCenterPrefix as *const u8;
             unsafe {
-                std::ptr::copy_nonoverlapping(
-                    tmp,
-                    ptr.add(i * center_item_len + info_len),
-                    center_prefix,
-                );
-                let key_start = i * center_item_len + info_len + center_prefix;
+                let center_start = i * center_item_len + info_len;
+                let tmp = &(code.len(), center_point.0.x, center_point.0.y)
+                    as *const DiskAreaGeoCenterPrefix as *const u8;
+                std::ptr::copy_nonoverlapping(tmp, ptr.add(center_start), center_prefix);
+                let key_start = center_start + center_prefix;
                 std::ptr::copy_nonoverlapping(
                     code.as_bytes().as_ptr(),
                     ptr.add(key_start),
@@ -874,32 +877,28 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
                 );
             }
             //保存元素坐标点到mmap
-            //lat,lng,key_len
-            let tmp = &(exc_len, iner_len) as *const (usize, usize) as *const u8;
-            let tmp_size = std::mem::size_of::<(usize, usize)>();
             unsafe {
-                let offset = i * polygon_item_size + mmap_center_size + info_len;
-                if i == 1156 {
-                    //  println!("{}{}", exc_len, iner_len);
-                }
-                std::ptr::copy_nonoverlapping(tmp, ptr.add(offset), tmp_size);
+                let py_start = i * polygon_item_size + mmap_center_size + info_len;
+                let tmp = &(exc_len, iner_len) as *const (usize, usize) as *const u8;
+                let py_prefix_size = std::mem::size_of::<(usize, usize)>();
+                std::ptr::copy_nonoverlapping(tmp, ptr.add(py_start), py_prefix_size);
 
-                let tmpii_size = std::mem::size_of::<usize>();
+                let line_size = std::mem::size_of::<usize>();
                 for (iit, iitmp) in iner_data.iter().enumerate() {
-                    let tmp1 = iitmp as *const usize as *const u8;
+                    let tmp = iitmp as *const usize as *const u8;
                     std::ptr::copy_nonoverlapping(
-                        tmp1,
-                        ptr.add(offset + tmp_size + iit * tmpii_size),
-                        tmpii_size,
+                        tmp,
+                        ptr.add(py_start + py_prefix_size + iit * line_size),
+                        line_size,
                     );
                 }
-                let tmpii_size = std::mem::size_of::<(f64, f64)>();
+                let point_size = std::mem::size_of::<(f64, f64)>();
                 for (iit, iitmp) in data_vec.iter().enumerate() {
                     let tmp1 = &(iitmp.x, iitmp.y) as *const (f64, f64) as *const u8;
                     std::ptr::copy_nonoverlapping(
                         tmp1,
-                        ptr.add(offset + polygon_prefix + iit * tmpii_size),
-                        tmpii_size,
+                        ptr.add(py_start + polygon_prefix + iit * point_size),
+                        point_size,
                     );
                 }
             }
