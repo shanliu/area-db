@@ -59,7 +59,7 @@ let area = area_db::AreaDao::from_csv_mem(data, AreaStoreMemory::default()).unwr
 
 ```toml
 #cargo.toml
-area-db = { version = "~0.0.*", default-features=false,features=["data-sqlite-source"]}
+area-db = { version = "~0.1.*", default-features=false,features=["data-sqlite-source"]}
 ```
 
 ```rust
@@ -80,7 +80,7 @@ let area = area_db::AreaDao::from_sqlite_mem(sqlite, AreaStoreMemory::default())
 
 ```toml
 #cargo.toml
-area-db = { version = "~0.0.*", default-features=false,features=["data-mysql"]}
+area-db = { version = "~0.1.*", default-features=false,features=["data-mysql"]}
 ```
 
 ```rust
@@ -110,7 +110,7 @@ cargo build --features "lib-clib"
 ```
 ```toml
 #修改 cargo.toml 添加 lib-clib
-area-db = { version = "~0.0.*",features=["lib-clib"]}
+area-db = { version = "~0.1.*",features=["lib-clib"]}
 ```
 
 
