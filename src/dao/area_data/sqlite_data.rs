@@ -7,7 +7,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{AreaCodeData, AreaDataProvider, AreaError, AreaGeoData, AreaGeoDataItem, AreaResult};
 
-use super::utils::en_name_keyword;
+use super::utils::{en_name_keyword, read_file_md5};
 
 impl From<rusqlite::Error> for AreaError {
     fn from(err: rusqlite::Error) -> Self {
