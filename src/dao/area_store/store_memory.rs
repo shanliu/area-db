@@ -192,6 +192,10 @@ impl AreaGeoProvider for MemoryAreaGeoProvider {
     }
 }
 
+//把数据仅保存在内存
+//每次启动都重新构建索引，启动比较慢
+//索引数据都保存在内存中，启动后占用内存是磁盘的10倍以上
+//好处是响应速度快，是mmap方式的2倍以上
 pub struct AreaStoreMemory {
     index_size: usize,
 }

@@ -63,7 +63,7 @@ ZEND_METHOD(AreaDb, initCsv){
     size_t code_file_len=0;
     char *geo_file;
     size_t geo_file_len=0;
-    zend_bool gz=0;
+    zend_bool gz=1;
     zend_long index_size=0;
     char *index_path;
     size_t index_path_len=0;
@@ -110,7 +110,6 @@ CAREA_W_UNLOCK()
 ZEND_METHOD(AreaDb, initSqlite){
     char *filename;
     size_t filename_len;
-
     zend_long index_size=0;
     char *index_path;
     size_t index_path_len=0;

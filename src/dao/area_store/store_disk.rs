@@ -981,6 +981,9 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
     }
 }
 
+//把数据用mmap存储到磁盘
+//可以节省运行时内存及重新启动时，用以前构建的索引，启动速度比较快
+//响应速比纯内存方式要慢2倍以上
 pub struct AreaStoreDisk {
     dir: PathBuf,
     index_size: usize,
@@ -1000,6 +1003,7 @@ impl AreaStoreDisk {
             index_size: index_size.unwrap_or(500_000_000),
         })
     }
+    /// 清理已生成的索引数据
     pub fn clear(self) -> AreaResult<Self> {
         remove_dir_all(&self.dir)?;
         if std::fs::metadata(&self.dir).is_err() {
