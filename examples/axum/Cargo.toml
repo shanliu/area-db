@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 axum = { version = "0.6.19" }
 tokio = { version = "1.0", features = ["full"] }
-area-db = { version = "0.0.*", path = "../../", features = [
+area-db = { version = "0.1.*", path = "../../", features = [
     "data-csv",
     "index-disk",
 ] }
