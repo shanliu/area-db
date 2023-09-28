@@ -456,7 +456,7 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
     fn childs(&self, code_data: &[&str]) -> Option<Vec<(String, bool)>> {
         let index = match code_data.last() {
             Some(t) => t,
-            None => return None,
+            None => "",
         };
         if let Some(mmap) = &self.mmap {
             let tmp = match mmap_code_tree_childs(&self.index, mmap, index) {
@@ -468,7 +468,7 @@ impl AreaCodeIndexTree for AreaCodeIndexTreeDisk {
                     .map(|t| {
                         let next = mmap_code_tree_childs(&self.index, mmap, &t)
                             .map(|tt| !tt.is_empty())
-                            .unwrap_or(true);
+                            .unwrap_or(false);
                         (t, next)
                     })
                     .collect(),
