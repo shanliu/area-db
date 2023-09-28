@@ -262,9 +262,6 @@ impl<AP: AreaCodeProvider> AreaCode<AP> {
     /// 获取行政区域编码同级区域的相关数据
     pub fn related(&self, code: &str) -> AreaResult<Vec<Vec<AreaCodeRelatedItem>>> {
         let code_data = Self::code_parse(code);
-        if code_data.is_empty() {
-            return Ok(vec![]);
-        }
         let mut out_list = Vec::with_capacity(5);
         let mut now_list = Some(self.childs("")?);
         for ddd in code_data {

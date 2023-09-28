@@ -33,15 +33,20 @@ async fn main() {
         let area_dao = Arc::clone(&area_dao);
         get(
             |Path(path): Path<String>, Query(params): Query<HashMap<String, String>>| async {
-                area_handler(path, params, area_dao)
-                    .await
-                    .unwrap_or_else(|e| {
+                match area_handler(path, params, area_dao).await {
+                    Ok(data) => {
                         json!({
-                            "status":false,
-                            "msg":e.to_string(),
+                            "status":true,
+                            "msg":"ok",
+                            "data":data
                         })
-                    })
-                    .to_string()
+                    }
+                    Err(err) => json!({
+                        "status":false,
+                        "msg":err.to_string(),
+                    }),
+                }
+                .to_string()
             },
         )
     });
