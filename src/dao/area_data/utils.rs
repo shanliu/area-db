@@ -6,9 +6,9 @@ use crate::{AreaError, AreaResult};
 pub(crate) fn read_file_md5(path: &PathBuf) -> String {
     use sha2::{Digest, Sha256};
     use std::{fs, io};
-    if let Ok(mut file) = fs::File::open(&path) {
+    if let Ok(mut file) = fs::File::open(path) {
         let mut hasher = Sha256::new();
-        if let Ok(_) = io::copy(&mut file, &mut hasher) {
+        if io::copy(&mut file, &mut hasher).is_ok() {
             return format!("{:x}", hasher.finalize());
         }
     }
