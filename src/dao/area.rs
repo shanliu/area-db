@@ -78,12 +78,13 @@ impl<DO: AreaStoreProvider, DD: AreaDataProvider> Area<DO, DD> {
     pub fn code_search(&self, name: &str, limit: usize) -> AreaResult<Vec<AreaSearchItem>> {
         if name.trim().is_empty() {
             let mut out = Vec::with_capacity(limit);
-            while let Ok(tmp) = self.code.read().childs("") {
+            for tmp in self.code.read().childs("")? {
                 out.push(AreaSearchItem {
-                    item: tmp,
+                    item: vec![tmp],
                     source: 1.0,
                 })
             }
+            out.truncate(limit);
             return Ok(out);
         }
         self.code.read().search(name, limit)

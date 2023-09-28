@@ -1,14 +1,12 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use area::area_handler;
-use area_db::{AreaDao, AreaStoreDisk, CsvAreaCodeData, CsvAreaData, CsvAreaGeoData};
+use area_db::{AreaDao, CsvAreaCodeData, CsvAreaData, CsvAreaGeoData};
 use axum::{extract::Path, extract::Query, routing::get, Router};
 use serde_json::json;
 mod area;
 #[tokio::main]
 async fn main() {
-    let mut index_dir = std::env::temp_dir();
-    index_dir.push("area-db-data");
     let mut code_path = PathBuf::from("../../data/2023-7-area-code.csv.gz");
     if !code_path.is_file() {
         code_path = PathBuf::from("data/2023-7-area-code.csv.gz");
@@ -21,8 +19,15 @@ async fn main() {
         CsvAreaCodeData::from_inner_path(code_path, true).unwrap(),
         CsvAreaGeoData::from_inner_path(geo_path, true).ok(),
     );
+    //内存方式
+    // let area_dao =
+    //     Arc::new(AreaDao::from_csv_mem(data, area_db::AreaStoreMemory::default()).unwrap());
+    //磁盘方式
+    let mut index_dir = std::env::temp_dir();
+    index_dir.push("area-db-data");
     let area_dao = Arc::new(
-        AreaDao::from_csv_disk(data, AreaStoreDisk::new(index_dir, None).unwrap()).unwrap(),
+        AreaDao::from_csv_disk(data, area_db::AreaStoreDisk::new(index_dir, None).unwrap())
+            .unwrap(),
     );
     let app = Router::new().route("/area/:path", {
         let area_dao = Arc::clone(&area_dao);
