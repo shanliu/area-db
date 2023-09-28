@@ -623,6 +623,7 @@ impl AreaCodeProvider for DiskAreaCodeProvider {
 }
 
 pub struct DiskAreaGeoProvider {
+    max_distance: u64,
     polygon_data: Vec<(String, Point, LineString, Vec<LineString>)>,
     mmap: Option<Mmap>,
     path: PathBuf,
@@ -630,6 +631,7 @@ pub struct DiskAreaGeoProvider {
 impl DiskAreaGeoProvider {
     pub fn new(path: PathBuf) -> Self {
         Self {
+            max_distance: 0,
             mmap: None,
             path,
             polygon_data: vec![],
@@ -637,7 +639,7 @@ impl DiskAreaGeoProvider {
     }
 }
 
-type DiskAreaGeoInfo = (usize, usize, usize, usize, usize);
+type DiskAreaGeoInfo = (usize, usize, usize, usize, u64, usize);
 type DiskAreaGeoCenterPrefix = (usize, f64, f64);
 
 impl AreaGeoProvider for DiskAreaGeoProvider {
@@ -668,7 +670,8 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
             max_code_length, //code 最大长度
             _,               //最大线数量
             _,               //坐标总数量
-            version_len,     //版本字符串长度
+            _,
+            version_len, //版本字符串长度
         ) = unsafe {
             let ptr = mmap[0..].as_ptr() as *const DiskAreaGeoInfo;
             ptr.read()
@@ -711,7 +714,8 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
             max_code_length,  //code 最大长度
             max_line_len,     //最大线数量
             max_polygon_size, //坐标总数量
-            version_len,      //版本字符串长度
+            _,
+            version_len, //版本字符串长度
         ) = unsafe {
             let ptr = mmap[0..].as_ptr() as *const DiskAreaGeoInfo;
             ptr.read()
@@ -770,7 +774,10 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
         };
         Some(AreaGeoIndexInfo::new(exterior, interiors))
     }
-    fn save(&mut self, version: &str) -> AreaResult<()> {
+    fn get_max_distance(&self) -> AreaResult<u64> {
+        Ok(self.max_distance)
+    }
+    fn save(&mut self, max_distance: u64, version: &str) -> AreaResult<()> {
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -851,7 +858,8 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
             max_code_length,  //code 最大长度
             max_line_len,     //最大线数量
             max_polygon_size, //坐标总数量
-            version.len(),    //版本字符串长度
+            max_distance,
+            version.len(), //版本字符串长度
         ) as *const DiskAreaGeoInfo as *const u8;
         unsafe {
             std::ptr::copy_nonoverlapping(tmp, ptr, std::mem::size_of::<DiskAreaGeoInfo>());
@@ -917,6 +925,8 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
         let mmap = unsafe { Mmap::map(&file)? };
         self.polygon_data = vec![];
         self.mmap = Some(mmap);
+        self.max_distance = max_distance;
+
         Ok(())
     }
     fn version(&self) -> String {
@@ -949,6 +959,22 @@ impl AreaGeoProvider for DiskAreaGeoProvider {
         }
         file.seek(SeekFrom::Start(0))?;
         let mmap = unsafe { Mmap::map(&file)? };
+
+        let (
+            max_len, //元素总量
+            _,       //code 最大长度
+            _,       //最大线数量
+            _,       //坐标总数量
+            max_distance,
+            _,
+        ) = unsafe {
+            let ptr = mmap[0..].as_ptr() as *const DiskAreaGeoInfo;
+            ptr.read()
+        };
+        if max_len == 0 {
+            return Ok(());
+        }
+        self.max_distance = max_distance;
         self.mmap = Some(mmap);
         self.polygon_data = vec![];
         Ok(())

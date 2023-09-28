@@ -34,7 +34,8 @@ pub struct AreaGeoData {
 
 pub trait AreaGeoProvider {
     fn clear(&mut self) -> AreaResult<()>;
-    fn save(&mut self, version: &str) -> AreaResult<()>;
+    fn save(&mut self, max_distance: u64, version: &str) -> AreaResult<()>;
+    fn get_max_distance(&self) -> AreaResult<u64>;
     fn push_data(
         &mut self,
         code: &str,
@@ -51,22 +52,19 @@ pub trait AreaGeoProvider {
 
 pub struct AreaGeo<AP: AreaGeoProvider> {
     geo_data: AP,
-    max_distance: u64,
 }
 
 impl<AP: AreaGeoProvider> AreaGeo<AP> {
     pub fn new(mut geo_data: AP) -> AreaResult<Self> {
         geo_data.init()?;
-        Ok(Self {
-            geo_data,
-            max_distance: 0,
-        })
+        Ok(Self { geo_data })
     }
     pub fn version_match(&self, version: &str) -> bool {
         self.geo_data.version().as_str() == version
     }
     pub fn load_data(&mut self, area_geo_data: Vec<AreaGeoData>, version: &str) -> AreaResult<()> {
         self.geo_data.clear()?;
+        let mut max_distance = 0;
         // let mut i = 0;
         for tmp_area in area_geo_data {
             for tmp_item in tmp_area.item.iter() {
@@ -93,8 +91,8 @@ impl<AP: AreaGeoProvider> AreaGeo<AP> {
                     let top_left = std::convert::Into::<Point>::into(rc_tmp.min());
                     let bottom_right = std::convert::Into::<Point>::into(rc_tmp.max());
                     let longest_distance = top_left.geodesic_distance(&bottom_right);
-                    if longest_distance > 0.0 && self.max_distance < longest_distance as u64 {
-                        self.max_distance = longest_distance as u64;
+                    if longest_distance > 0.0 && max_distance < longest_distance as u64 {
+                        max_distance = longest_distance as u64;
                     }
                 }
 
@@ -125,18 +123,17 @@ impl<AP: AreaGeoProvider> AreaGeo<AP> {
                     .push_data(&tmp_area.code, center, exterior, vec![])?;
             }
         }
-        // println!("{}", self.max_distance);
-        if self.max_distance == 0 {
-            self.max_distance = 5500000;
-        }
-        self.geo_data.save(version)?;
+        self.geo_data.save(max_distance, version)?;
         Ok(())
     }
     /// 通过坐标获取可能区域
     pub fn search(&self, coord: &Coord) -> AreaResult<String> {
         let point = std::convert::Into::<Point>::into(coord.to_owned());
         let get_data = self.geo_data.get_center_data()?;
-        let max_distance = self.max_distance;
+        let mut max_distance = self.geo_data.get_max_distance().unwrap_or(0);
+        if max_distance == 0 {
+            max_distance = 5500000
+        }
         let mut dit_data = get_data
             .par_iter()
             .flat_map(|(i, code, center)| {

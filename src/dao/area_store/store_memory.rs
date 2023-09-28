@@ -142,6 +142,7 @@ impl AreaCodeProvider for MemoryAreaCodeProvider {
 #[derive(Default)]
 pub struct MemoryAreaGeoProvider {
     version: String,
+    max_distance: u64,
     center_data: Vec<(usize, String, Point)>,
     polygon_data: HashMap<usize, (LineString, Vec<LineString>)>,
     max_index: usize,
@@ -153,9 +154,13 @@ impl AreaGeoProvider for MemoryAreaGeoProvider {
         self.polygon_data = HashMap::new();
         Ok(())
     }
-    fn save(&mut self, version: &str) -> AreaResult<()> {
+    fn save(&mut self, max_distance: u64, version: &str) -> AreaResult<()> {
         self.version = version.to_owned();
+        self.max_distance = max_distance;
         Ok(())
+    }
+    fn get_max_distance(&self) -> AreaResult<u64> {
+        Ok(self.max_distance)
     }
     fn init(&mut self) -> AreaResult<()> {
         Ok(())
