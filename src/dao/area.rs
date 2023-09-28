@@ -40,7 +40,7 @@ impl<DO: AreaStoreProvider, DD: AreaDataProvider> Area<DO, DD> {
     }
     pub fn code_reload(&self) -> AreaResult<()> {
         let data_ver = self.data_provider.code_data_version();
-        if !self.code.read().version_match(&data_ver) {
+        if data_ver.is_empty() || !self.code.read().version_match(&data_ver) {
             self.code
                 .write()
                 .load_data(self.data_provider.code_data()?, &data_ver)?;
@@ -49,7 +49,7 @@ impl<DO: AreaStoreProvider, DD: AreaDataProvider> Area<DO, DD> {
     }
     pub fn geo_reload(&self) -> AreaResult<()> {
         let data_ver = self.data_provider.geo_data_version();
-        if !self.geo.read().version_match(&data_ver) {
+        if data_ver.is_empty() || !self.geo.read().version_match(&data_ver) {
             self.geo
                 .write()
                 .load_data(self.data_provider.geo_data()?, &data_ver)?;
