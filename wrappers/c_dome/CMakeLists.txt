@@ -20,6 +20,10 @@ else()
     target_link_libraries(area_dome area_db)
 endif ()
 
+#cd wrappers/c_dome
 #windows:add dll path to env
-#PATH=../target/release or PATH=../target/debug 
+#Path=..\..\target\debug or Path=..\..\target\debug
 
+####or####
+#cd target\debug
+#..\..\wrappers\c_dome\cmake-build-*\area_dome.exe

@@ -7,9 +7,9 @@
 #安装cargo 参考: https://www.rustup.rs
 cd ../ && cargo build --features "lib-clib" -r && ./php_ext 
 cp ./target/release/area_db.h ./php_ext/lib/area_db.h
-#windows:
+#linux or mac:
 cp ./target/release/libarea_db.so ./php_ext/lib/libarea_db.so
-#linux or mac
+#windows:
 cp ./target/release/area_db.dll ./php_ext/lib/area_db.dll
 cp ./target/release/area_db.dll.lib ./php_ext/lib/area_db.lib
 
@@ -55,7 +55,7 @@ configure --disable-all --enable-cli --enable-area_db=shared
 nmake
 ```
 
-> 使用时拷贝 area_db.dll 到 php.exe 的目录
+> 使用时拷贝 area_db.dll 到 php.exe 的目录 及在php.ini其中area_db
 
 
 #### 测试示例

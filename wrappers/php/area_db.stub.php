@@ -14,7 +14,7 @@ namespace LsExt {
         static public function initCsv(
             string $code_path,
             string $geo_path,
-            string $index_path = NULL,
+            string $index_path = "",
             int $index_size = 0,
             bool $gz = true,
         ): void {
@@ -24,7 +24,7 @@ namespace LsExt {
          */
         static public function initSqlite(
             string $sqlite_sql,
-            string $index_path = NULL,
+            string $index_path = "",
             int $index_size = 0,
         ): void {
         }
@@ -33,7 +33,7 @@ namespace LsExt {
          */
         static public function initMysql(
             string $uri,
-            string $index_path = NULL,
+            string $index_path = "",
             int $index_size = 0,
         ): void {
         }

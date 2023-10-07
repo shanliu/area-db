@@ -13,7 +13,7 @@ const GEO_DATA_PATH = __DIR__ . "/../../data/2023-7-area-geo.csv.gz";
 use LsExt\AreaDb;
 
 try {
-    AreaDb::initCsv(CODE_DATA_PATH, GEO_DATA_PATH, "./area_data", 0, true);
+    AreaDb::initCsv(CODE_DATA_PATH, GEO_DATA_PATH, sys_get_temp_dir()."/area_db");
     $out = array('status' => true, 'msg' => 'ok', 'data' => action($_GET));
 } catch (Exception $e) {
     $out = array('status' => FALSE, 'msg' => $e->getMessage());

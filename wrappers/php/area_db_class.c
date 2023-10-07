@@ -58,7 +58,7 @@ void throw_area_exception(const zend_long code,const char* fmt,char* ret_err){
 }
 
 
-ZEND_METHOD(AreaDb, initCsv){
+ZEND_METHOD(LsExt_AreaDb, initCsv){
     char *code_file;
     size_t code_file_len=0;
     char *geo_file;
@@ -68,11 +68,20 @@ ZEND_METHOD(AreaDb, initCsv){
     char *index_path;
     size_t index_path_len=0;
 
-#if PHP_VERSION_ID < 80000
+#if (PHP_VERSION_ID >= 80000)
+    ZEND_PARSE_PARAMETERS_START(2, 5)
+    Z_PARAM_PATH(code_file, code_file_len)
+    Z_PARAM_PATH(geo_file, geo_file_len)
+    Z_PARAM_OPTIONAL
+    Z_PARAM_PATH(index_path, index_path_len)
+    Z_PARAM_LONG(index_size)
+    Z_PARAM_BOOL(gz)
+    ZEND_PARSE_PARAMETERS_END();
+#else
     if (zend_parse_parameters(
-            ZEND_NUM_ARGS(), 
-            "pp|plb", 
-            &code_file, &code_file_len, 
+            ZEND_NUM_ARGS(),
+            "pp|plb",
+            &code_file, &code_file_len,
             &geo_file, &geo_file_len,
             &index_path, &index_path_len,
             &index_size,
@@ -80,15 +89,6 @@ ZEND_METHOD(AreaDb, initCsv){
         ) == FAILURE) {
         return;
     }
-#else
-    ZEND_PARSE_PARAMETERS_START(2, 5)
-        Z_PARAM_PATH(code_file, code_file_len)
-        Z_PARAM_PATH(geo_file, geo_file_len)
-        Z_PARAM_OPTIONAL
-        Z_PARAM_PATH(index_path, index_path_len)
-        Z_PARAM_LONG(index_size)
-        Z_PARAM_BOOL(gz)
-    ZEND_PARSE_PARAMETERS_END();
 #endif
     char *ret_err=NULL;
     int ret_no=0;
@@ -107,20 +107,20 @@ CAREA_W_UNLOCK()
     }
 }
 
-ZEND_METHOD(AreaDb, initSqlite){
+ZEND_METHOD(LsExt_AreaDb, initSqlite){
     char *filename;
     size_t filename_len;
     zend_long index_size=0;
     char *index_path;
     size_t index_path_len=0;
 
-#if PHP_VERSION_ID < 80000
+#if (PHP_VERSION_ID < 80000)
     if (zend_parse_parameters(
             ZEND_NUM_ARGS(), 
             "p|pl", 
             &filename, &filename_len,
             &index_path, &index_path_len,
-            &index_size,
+            &index_size
         ) == FAILURE) {
             return;
         }
@@ -157,30 +157,30 @@ ZEND_METHOD(AreaDb, initSqlite){
 }
 
 
-ZEND_METHOD(AreaDb, initMysql){
+ZEND_METHOD(LsExt_AreaDb, initMysql){
     char *uri;
     size_t uri_len;
     zend_long index_size=0;
     char *index_path;
     size_t index_path_len=0;
 
-#if PHP_VERSION_ID < 80000
+#if (PHP_VERSION_ID >= 80000)
+    ZEND_PARSE_PARAMETERS_START(1, 3)
+    Z_PARAM_PATH(uri, uri_len)
+    Z_PARAM_OPTIONAL
+    Z_PARAM_PATH(index_path, index_path_len)
+    Z_PARAM_LONG(index_size)
+    ZEND_PARSE_PARAMETERS_END();
+#else
     if (zend_parse_parameters(
-            ZEND_NUM_ARGS(), 
-            "p|pl", 
+            ZEND_NUM_ARGS(),
+            "p|pl",
             &uri, &uri_len,
             &index_path, &index_path_len,
-            &index_size,
+            &index_size
         ) == FAILURE) {
             return;
         }
-#else
-    ZEND_PARSE_PARAMETERS_START(1, 3)
-        Z_PARAM_PATH(uri, uri_len)
-        Z_PARAM_OPTIONAL
-        Z_PARAM_PATH(index_path, index_path_len)
-        Z_PARAM_LONG(index_size)
-    ZEND_PARSE_PARAMETERS_END();
 #endif
 #if HAVE_AREA_DB_USE_MYSQL
     char *ret_err=NULL;
@@ -205,7 +205,7 @@ ZEND_METHOD(AreaDb, initMysql){
     RETURN_NULL();
 }
 
-ZEND_METHOD(AreaDb, shutdown){
+ZEND_METHOD(LsExt_AreaDb, shutdown){
 CAREA_W_LOCK()
     if (GET_CAREA_DAO()  != NULL) {
         area_db_release_area_dao(GET_CAREA_DAO() );
@@ -216,7 +216,7 @@ CAREA_W_UNLOCK()
 
 
 
-ZEND_METHOD(AreaDb, codeReload){
+ZEND_METHOD(LsExt_AreaDb, codeReload){
     char *ret_err=NULL;
     int ret_no=0;
 
@@ -228,7 +228,7 @@ ZEND_METHOD(AreaDb, codeReload){
         throw_area_exception(ret_no,"reload code fail:%s",ret_err);
     }
 }
-ZEND_METHOD(AreaDb, geoReload){
+ZEND_METHOD(LsExt_AreaDb, geoReload){
     char *ret_err=NULL;
     int ret_no=0;
 CAREA_W_LOCK()
@@ -243,18 +243,18 @@ CAREA_W_UNLOCK()
 
 
 
-ZEND_METHOD(AreaDb, codeChilds){
+ZEND_METHOD(LsExt_AreaDb, codeChilds){
     char *code=NULL;
     size_t code_len = 0;
 
-#if PHP_VERSION_ID < 80000
-    if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &code, &code_len) == FAILURE) {
-            return;
-        }
-#else
+#if (PHP_VERSION_ID >= 80000)
     ZEND_PARSE_PARAMETERS_START(1, 1)
-        Z_PARAM_STRING(code, code_len)
+    Z_PARAM_STRING(code, code_len)
     ZEND_PARSE_PARAMETERS_END();
+#else
+    if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &code, &code_len) == FAILURE) {
+        return;
+    }
 #endif
     CAreaItemVec* area_vec2=NULL;
     char *ret_err=NULL;
@@ -272,17 +272,17 @@ CAREA_R_UNLOCK()
 }
 
 
-ZEND_METHOD(AreaDb, codeFind){
+ZEND_METHOD(LsExt_AreaDb, codeFind){
     char *code=NULL;
     size_t code_len = 0;
-#if PHP_VERSION_ID < 80000
+#if (PHP_VERSION_ID >= 80000)
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+    Z_PARAM_STRING(code, code_len)
+    ZEND_PARSE_PARAMETERS_END();
+#else
     if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &code, &code_len) == FAILURE) {
             return;
         }
-#else
-    ZEND_PARSE_PARAMETERS_START(1, 1)
-        Z_PARAM_STRING(code, code_len)
-    ZEND_PARSE_PARAMETERS_END();
 #endif
     CAreaItemVec* area_vec2=NULL;
     char *ret_err=NULL;
@@ -300,20 +300,20 @@ CAREA_R_UNLOCK()
 }
 
 
-ZEND_METHOD(AreaDb, codeSearch){
+ZEND_METHOD(LsExt_AreaDb, codeSearch){
     char *code=NULL;
     size_t code_len = 0;
     zend_long limit=10;
-#if PHP_VERSION_ID < 80000
-    if (zend_parse_parameters(ZEND_NUM_ARGS(), "s|l", &code, &code_len,&limit) == FAILURE) {
-            return;
-        }
-#else
+#if (PHP_VERSION_ID >= 80000)
     ZEND_PARSE_PARAMETERS_START(1, 2)
-        Z_PARAM_STRING(code, code_len)
-        Z_PARAM_OPTIONAL
-        Z_PARAM_LONG(limit)
+    Z_PARAM_STRING(code, code_len)
+    Z_PARAM_OPTIONAL
+    Z_PARAM_LONG(limit)
     ZEND_PARSE_PARAMETERS_END();
+#else
+    if (zend_parse_parameters(ZEND_NUM_ARGS(), "s|l", &code, &code_len,&limit) == FAILURE) {
+        return;
+    }
 #endif
     CAreaItemVecs* area_vec1=NULL;
     char *ret_err=NULL;
@@ -350,19 +350,18 @@ CAREA_R_UNLOCK()
     }
 }
 
-ZEND_METHOD(AreaDb, codeRelated){
+ZEND_METHOD(LsExt_AreaDb, codeRelated){
     char *code=NULL;
     size_t code_len = 0;
 
-#if PHP_VERSION_ID < 80000
-    if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &code, &code_len) == FAILURE) {
-            return;
-        }
-#else
+#if (PHP_VERSION_ID >= 80000)
     ZEND_PARSE_PARAMETERS_START(1, 2)
-            Z_PARAM_STRING(code, code_len)
-
+    Z_PARAM_STRING(code, code_len)
     ZEND_PARSE_PARAMETERS_END();
+#else
+    if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &code, &code_len) == FAILURE) {
+        return;
+    }
 #endif
     CAreaRelatedItemVecs * area_vec1=NULL;
     char *ret_err=NULL;
@@ -400,18 +399,18 @@ CAREA_R_UNLOCK()
     }
 }
 
-ZEND_METHOD(AreaDb, geoSearch){
+ZEND_METHOD(LsExt_AreaDb, geoSearch){
     double lat=0.0;
     double lng=0.0;
-#if PHP_VERSION_ID < 80000
-    if (zend_parse_parameters(ZEND_NUM_ARGS(), "dd", &lat, &lng) == FAILURE) {
-            return;
-        }
-#else
+#if (PHP_VERSION_ID >= 80000)
     ZEND_PARSE_PARAMETERS_START(2, 2)
-            Z_PARAM_DOUBLE(lat)
-            Z_PARAM_DOUBLE(lng)
+    Z_PARAM_DOUBLE(lat)
+    Z_PARAM_DOUBLE(lng)
     ZEND_PARSE_PARAMETERS_END();
+#else
+    if (zend_parse_parameters(ZEND_NUM_ARGS(), "dd", &lat, &lng) == FAILURE) {
+        return;
+    }
 #endif
     CAreaItemVec* area_vec1=NULL;
     char *ret_err=NULL;
@@ -431,7 +430,7 @@ CAREA_R_UNLOCK()
 zend_class_entry *area_core_ce_ptr;
 void area_db_class_init() {
     zend_class_entry ce;
-    INIT_NS_CLASS_ENTRY(ce, AREA_DB_NS, "AreaDB", class_AreaDb_methods);
+    INIT_NS_CLASS_ENTRY(ce, AREA_DB_NS, "AreaDB", class_LsExt_AreaDb_methods);
     area_core_ce_ptr = zend_register_internal_class(&ce);
     zend_declare_property_null(area_core_ce_ptr, ZEND_STRL("res"), ZEND_ACC_PRIVATE);
 }

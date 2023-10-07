@@ -9,7 +9,7 @@ if (!extension_loaded('area_db')) {
 --FILE--
 <?php
 use LsExt\AreaDb;
-AreaDb::initCsv(__DIR__."/../../../data/2023-7-area-code.csv.gz",__DIR__."/../../../data/2023-7-area-geo.csv.gz");
+AreaDb::initCsv(__DIR__."/../../../data/2023-7-area-code.csv.gz",__DIR__."/../../../data/2023-7-area-geo.csv.gz",sys_get_temp_dir()."/area_db");
 $ret =AreaDb::codeSearch("guangdong");
 echo count($ret);
 $ret =AreaDb::codeSearch("ddddddddddddddddd");
@@ -51,4 +51,4 @@ echo count($ret);
 AreaDb::shutdown();
 ?>
 --EXPECT--
-70203033407020303340
+1002136334010021363340
