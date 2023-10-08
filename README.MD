@@ -11,8 +11,6 @@
 
 2. 县区级经纬度坐标数据 [sqlite数据](data/area-data-sqlite.7z) [csv数据](data/2023-7-area-geo.csv.gz)
 
-3. 预计下一步引入：ip对应城市数据
-
 
 #### 基于 axum 的示例
 ```
@@ -170,4 +168,3 @@ let res = area.geo_search(  26.61474,  114.13548 , ).unwrap();
 println!("{}", &res);
 ```
 
-6. 根据当前ip获取地址信息【待定，后面会补上】
