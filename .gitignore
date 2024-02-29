@@ -10,3 +10,5 @@ data/area-data.db
 .gitmodules
 src/main.rs
 /sqlite-amalgamation/*
+data/2023-7-area-code.csv.lock
+data/2023-7-area-geo.csv.lock
