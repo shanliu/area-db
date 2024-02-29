@@ -29,23 +29,11 @@ fn create_csv_zip_file(file_path: &str) {
 #[cfg(feature = "data-sqlite-source")]
 fn build_sqlite_form_source() {
 	
-	use std::fs::File;
-	use std::io::Write;
-	use std::process::Command;
-	
-	let content = r#"[submodule "sqlite-amalgamation"]
-path = sqlite-amalgamation
-url = https://github.com/php-lsys/sqlite-amalgamation
-"#;
-
-    // 打开或创建 .gitmodules 文件，并覆盖内容
-    let mut file =  File::create(".gitmodules").unwrap();
-    file.write_all(content.as_bytes()).unwrap();
     // 执行 git submodule update --init 命令
-    Command::new("git")
-        .args(&["submodule", "update", "--init"])
+    std::process::Command::new("git")
+        .args(&["submodule", "add", "sqlite-amalgamation","https://github.com/php-lsys/sqlite-amalgamation"])
         .output()
-        .expect("failed to execute git submodule update --init");
+        .expect("failed to execute git submodule add sqlite-amalgamation https://github.com/php-lsys/sqlite-amalgamation");
 
     use std::path::Path;
     println!("cargo:rustc-link-search=native=sqlite-amalgamation");
