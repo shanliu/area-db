@@ -31,9 +31,9 @@ fn build_sqlite_form_source() {
 	
     // 执行 git submodule update --init 命令
     std::process::Command::new("git")
-        .args(&["submodule", "add", "sqlite-amalgamation","https://github.com/php-lsys/sqlite-amalgamation"])
+        .args(&["submodule", "add", "https://github.com/php-lsys/sqlite-amalgamation","sqlite-amalgamation"])
         .output()
-        .expect("failed to execute git submodule add sqlite-amalgamation https://github.com/php-lsys/sqlite-amalgamation");
+        .unwrap();
 
     use std::path::Path;
     println!("cargo:rustc-link-search=native=sqlite-amalgamation");
