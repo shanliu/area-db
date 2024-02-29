@@ -59,7 +59,7 @@ let area = area_db::AreaDao::from_csv_mem(data, AreaStoreMemory::default()).unwr
 
 > 如果你已经装了lib-sqlite的库，可用:`data-sqlite` 会使用系统的sqlite库. 具体参见crate:`rusqlite`实现
 
-> 如果你未安装lib-sqlite的库，可用:`data-sqlite-source` 会通过c源码编译sqlite库. sqlite源码通过子模块`git submodule update --init`获取
+> 如果你未安装lib-sqlite的库，可用:`data-sqlite-source` 会通过c源码编译sqlite库.
 
 > sqlite数据源使用示例
 
