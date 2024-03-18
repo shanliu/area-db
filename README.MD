@@ -1,4 +1,6 @@
 
+已迁移到:[lsys/server/lsys-lib-area](https://github.com/shanliu/lsys/tree/main/server/lsys-lib-area) 
+
 ### 5级行政区域数据
 
 > Rust 实现 省市县镇村 数据查询 名称模糊搜索 及坐标对应城市搜索
